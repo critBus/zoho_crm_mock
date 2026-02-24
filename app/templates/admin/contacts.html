@@ -1,0 +1,66 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Contactos - Zoho Mock Admin{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <h2 class="text-2xl font-bold mb-4">Contactos de Zoho</h2>
+    
+    <!-- Filtros -->
+    <form method="GET" class="mb-6 p-4 bg-gray-50 rounded">
+        <div class="grid grid-cols-3 gap-4">
+            <input type="text" name="email" value="{{ filters.email or '' }}" placeholder="Email" class="border p-2 rounded">
+            <input type="text" name="zoho_id" value="{{ filters.zoho_id or '' }}" placeholder="Zoho ID" class="border p-2 rounded">
+        </div>
+        <button type="submit" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Filtrar</button>
+        <a href="/admin/contacts" class="mt-4 ml-2 text-gray-600 hover:text-gray-800">Limpiar</a>
+    </form>
+    
+    <!-- Tabla -->
+    <div class="overflow-x-auto">
+        <table class="min-w-full bg-white">
+            <thead>
+                <tr class="bg-gray-100">
+                    <th class="py-2 px-4 text-left">ID</th>
+                    <th class="py-2 px-4 text-left">Zoho ID</th>
+                    <th class="py-2 px-4 text-left">Email</th>
+                    <th class="py-2 px-4 text-left">Nombre</th>
+                    <th class="py-2 px-4 text-left">Teléfono</th>
+                    <th class="py-2 px-4 text-left">País</th>
+                    <th class="py-2 px-4 text-left">Creado</th>
+                    <th class="py-2 px-4 text-left">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for contact in contacts %}
+                <tr class="border-b hover:bg-gray-50">
+                    <td class="py-2 px-4">{{ contact.id }}</td>
+                    <td class="py-2 px-4 font-mono text-sm">{{ contact.zoho_id }}</td>
+                    <td class="py-2 px-4">{{ contact.email or '-' }}</td>
+                    <td class="py-2 px-4">{{ contact.first_name or '' }} {{ contact.last_name or '' }}</td>
+                    <td class="py-2 px-4">{{ contact.phone or '-' }}</td>
+                    <td class="py-2 px-4">{{ contact.country or '-' }}</td>
+                    <td class="py-2 px-4 text-sm">{{ contact.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td class="py-2 px-4">
+                        <a href="/admin/contacts/{{ contact.id }}" class="text-blue-600 hover:text-blue-800 text-sm">Ver</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Paginación -->
+    <div class="mt-4 flex justify-between items-center">
+        <p class="text-sm text-gray-600">Mostrando {{ (page - 1) * page_size + 1 }} - {{ [page * page_size, total]|min }} de {{ total }}</p>
+        <div class="space-x-2">
+            {% if page > 1 %}
+            <a href="?page={{ page - 1 }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Anterior</a>
+            {% endif %}
+            {% if page < total_pages %}
+            <a href="?page={{ page + 1 }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

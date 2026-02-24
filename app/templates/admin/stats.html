@@ -1,0 +1,73 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Estadísticas - Zoho Mock Admin{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <h2 class="text-2xl font-bold mb-4">Estadísticas del Sistema</h2>
+    
+    <div class="grid grid-cols-5 gap-4 mb-6">
+        <div class="bg-blue-100 p-4 rounded text-center">
+            <p class="text-sm text-gray-600">Total Contactos</p>
+            <p class="text-3xl font-bold">{{ stats.total_contacts }}</p>
+        </div>
+        <div class="bg-green-100 p-4 rounded text-center">
+            <p class="text-sm text-gray-600">Total Deals</p>
+            <p class="text-3xl font-bold">{{ stats.total_deals }}</p>
+        </div>
+        <div class="bg-purple-100 p-4 rounded text-center">
+            <p class="text-sm text-gray-600">Total API Calls</p>
+            <p class="text-3xl font-bold">{{ stats.total_api_calls }}</p>
+        </div>
+        <div class="bg-yellow-100 p-4 rounded text-center">
+            <p class="text-sm text-gray-600">Tasa de Éxito</p>
+            <p class="text-3xl font-bold">{{ "%.2f"|format(stats.success_rate) }}%</p>
+        </div>
+        <div class="bg-red-100 p-4 rounded text-center">
+            <p class="text-sm text-gray-600">Tiempo Promedio (ms)</p>
+            <p class="text-3xl font-bold">{{ "%.2f"|format(stats.avg_response_time) }}</p>
+        </div>
+    </div>
+    
+    <div class="grid grid-cols-3 gap-6">
+        <!-- Endpoints -->
+        <div class="bg-gray-50 p-4 rounded">
+            <h3 class="font-bold mb-3">Endpoints Más Usados</h3>
+            <ul class="space-y-2">
+                {% for endpoint, count in stats.endpoints %}
+                <li class="flex justify-between">
+                    <span class="text-sm">{{ endpoint }}</span>
+                    <span class="font-bold">{{ count }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        
+        <!-- Métodos -->
+        <div class="bg-gray-50 p-4 rounded">
+            <h3 class="font-bold mb-3">Métodos HTTP</h3>
+            <ul class="space-y-2">
+                {% for method, count in stats.methods %}
+                <li class="flex justify-between">
+                    <span class="text-sm">{{ method }}</span>
+                    <span class="font-bold">{{ count }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        
+        <!-- Status Codes -->
+        <div class="bg-gray-50 p-4 rounded">
+            <h3 class="font-bold mb-3">Códigos de Estado</h3>
+            <ul class="space-y-2">
+                {% for status, count in stats.status_codes %}
+                <li class="flex justify-between">
+                    <span class="text-sm">{{ status }}</span>
+                    <span class="font-bold">{{ count }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Zoho Mock Admin{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-100">
+    <nav class="bg-blue-600 text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold">Zoho Mock Admin</h1>
+            <div class="space-x-4">
+                <a href="/admin/logs" class="hover:text-blue-200">Logs</a>
+                <a href="/admin/contacts" class="hover:text-blue-200">Contactos</a>
+                <a href="/admin/deals" class="hover:text-blue-200">Deals</a>
+                <a href="/admin/stats" class="hover:text-blue-200">Estadísticas</a>
+            </div>
+        </div>
+    </nav>
+    
+    <main class="container mx-auto p-6">
+        {% block content %}{% endblock %}
+    </main>
+    
+    <footer class="bg-gray-800 text-white p-4 mt-8">
+        <div class="container mx-auto text-center">
+            <p>Zoho CRM Mock API - {{ now().year if now else 2024 }}</p>
+        </div>
+    </footer>
+</body>
+</html>

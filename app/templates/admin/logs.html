@@ -1,0 +1,113 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Logs de API - Zoho Mock Admin{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <h2 class="text-2xl font-bold mb-4">Logs de API</h2>
+    
+    <!-- Estadísticas -->
+    <div class="grid grid-cols-4 gap-4 mb-6">
+        <div class="bg-blue-100 p-4 rounded">
+            <p class="text-sm text-gray-600">Total Requests</p>
+            <p class="text-2xl font-bold">{{ stats.total_requests }}</p>
+        </div>
+        <div class="bg-green-100 p-4 rounded">
+            <p class="text-sm text-gray-600">Exitosos</p>
+            <p class="text-2xl font-bold">{{ stats.success_count }}</p>
+        </div>
+        <div class="bg-red-100 p-4 rounded">
+            <p class="text-sm text-gray-600">Errores</p>
+            <p class="text-2xl font-bold">{{ stats.error_count }}</p>
+        </div>
+        <div class="bg-yellow-100 p-4 rounded">
+            <p class="text-sm text-gray-600">Tiempo Promedio (ms)</p>
+            <p class="text-2xl font-bold">{{ "%.2f"|format(stats.avg_response_time) }}</p>
+        </div>
+    </div>
+    
+    <!-- Filtros -->
+    <form method="GET" class="mb-6 p-4 bg-gray-50 rounded">
+        <div class="grid grid-cols-4 gap-4">
+            <input type="text" name="endpoint" value="{{ filters.endpoint or '' }}" placeholder="Endpoint" class="border p-2 rounded">
+            <select name="method" class="border p-2 rounded">
+                <option value="">Todos los métodos</option>
+                <option value="POST" {% if filters.method == 'POST' %}selected{% endif %}>POST</option>
+                <option value="PUT" {% if filters.method == 'PUT' %}selected{% endif %}>PUT</option>
+                <option value="GET" {% if filters.method == 'GET' %}selected{% endif %}>GET</option>
+            </select>
+            <input type="number" name="status_code" value="{{ filters.status_code or '' }}" placeholder="Status Code" class="border p-2 rounded">
+            <select name="success" class="border p-2 rounded">
+                <option value="">Todos</option>
+                <option value="True" {% if filters.success == True %}selected{% endif %}>Exitosos</option>
+                <option value="False" {% if filters.success == False %}selected{% endif %}>Errores</option>
+            </select>
+            <input type="text" name="zoho_contact_id" value="{{ filters.zoho_contact_id or '' }}" placeholder="Zoho Contact ID" class="border p-2 rounded">
+            <input type="text" name="zoho_deal_id" value="{{ filters.zoho_deal_id or '' }}" placeholder="Zoho Deal ID" class="border p-2 rounded">
+            <input type="datetime-local" name="date_from" value="{{ filters.date_from or '' }}" class="border p-2 rounded">
+            <input type="datetime-local" name="date_to" value="{{ filters.date_to or '' }}" class="border p-2 rounded">
+        </div>
+        <button type="submit" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Filtrar</button>
+        <a href="/admin/logs" class="mt-4 ml-2 text-gray-600 hover:text-gray-800">Limpiar</a>
+    </form>
+    
+    <!-- Tabla -->
+    <div class="overflow-x-auto">
+        <table class="min-w-full bg-white">
+            <thead>
+                <tr class="bg-gray-100">
+                    <th class="py-2 px-4 text-left">ID</th>
+                    <th class="py-2 px-4 text-left">Request ID</th>
+                    <th class="py-2 px-4 text-left">Endpoint</th>
+                    <th class="py-2 px-4 text-left">Método</th>
+                    <th class="py-2 px-4 text-left">Status</th>
+                    <th class="py-2 px-4 text-left">Zoho Contact</th>
+                    <th class="py-2 px-4 text-left">Zoho Deal</th>
+                    <th class="py-2 px-4 text-left">Tiempo (ms)</th>
+                    <th class="py-2 px-4 text-left">Fecha</th>
+                    <th class="py-2 px-4 text-left">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr class="border-b hover:bg-gray-50">
+                    <td class="py-2 px-4">{{ log.id }}</td>
+                    <td class="py-2 px-4 text-sm font-mono">{{ log.request_id }}</td>
+                    <td class="py-2 px-4">{{ log.endpoint }}</td>
+                    <td class="py-2 px-4">
+                        <span class="px-2 py-1 rounded text-xs {% if log.method == 'POST' %}bg-green-100 text-green-800{% elif log.method == 'PUT' %}bg-blue-100 text-blue-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ log.method }}
+                        </span>
+                    </td>
+                    <td class="py-2 px-4">
+                        <span class="px-2 py-1 rounded text-xs {% if log.success %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                            {{ log.response_status_code }}
+                        </span>
+                    </td>
+                    <td class="py-2 px-4 text-sm">{{ log.zoho_contact_id or '-' }}</td>
+                    <td class="py-2 px-4 text-sm">{{ log.zoho_deal_id or '-' }}</td>
+                    <td class="py-2 px-4">{{ log.response_time_ms }}</td>
+                    <td class="py-2 px-4 text-sm">{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                    <td class="py-2 px-4">
+                        <a href="/admin/logs/{{ log.id }}" class="text-blue-600 hover:text-blue-800 text-sm">Ver</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- Paginación -->
+    <div class="mt-4 flex justify-between items-center">
+        <p class="text-sm text-gray-600">Mostrando {{ (page - 1) * page_size + 1 }} - {{ [page * page_size, total]|min }} de {{ total }}</p>
+        <div class="space-x-2">
+            {% if page > 1 %}
+            <a href="?page={{ page - 1 }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Anterior</a>
+            {% endif %}
+            {% if page < total_pages %}
+            <a href="?page={{ page + 1 }}{% for key, value in filters.items() %}{% if value %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">Siguiente</a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
