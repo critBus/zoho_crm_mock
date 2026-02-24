@@ -1,0 +1,134 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Contacto {{ contact.zoho_id }} - Zoho Mock Admin{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-2xl font-bold">Contacto #{{ contact.id }}</h2>
+        <a href="/admin/contacts" class="text-blue-600 hover:text-blue-800">← Volver a contactos</a>
+    </div>
+    
+    <!-- Zoho ID -->
+    <div class="bg-blue-50 p-4 rounded mb-6">
+        <p class="text-sm text-gray-600">Zoho ID</p>
+        <p class="font-mono text-lg">{{ contact.zoho_id }}</p>
+    </div>
+    
+    <!-- Información Personal -->
+    <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="bg-gray-50 p-4 rounded">
+            <p class="text-sm text-gray-600">Nombre</p>
+            <p class="font-medium">{{ contact.first_name or '' }} {{ contact.last_name or '' }}</p>
+        </div>
+        <div class="bg-gray-50 p-4 rounded">
+            <p class="text-sm text-gray-600">Email</p>
+            <p class="font-medium">{{ contact.email or '-' }}</p>
+        </div>
+        <div class="bg-gray-50 p-4 rounded">
+            <p class="text-sm text-gray-600">Teléfono</p>
+            <p class="font-medium">{{ contact.phone or '-' }}</p>
+        </div>
+        <div class="bg-gray-50 p-4 rounded">
+            <p class="text-sm text-gray-600">País</p>
+            <p class="font-medium">{{ contact.country or '-' }}</p>
+        </div>
+        <div class="bg-gray-50 p-4 rounded">
+            <p class="text-sm text-gray-600">Estado</p>
+            <p class="font-medium">{{ contact.state or '-' }}</p>
+        </div>
+        <div class="bg-gray-50 p-4 rounded">
+            <p class="text-sm text-gray-600">Ciudad</p>
+            <p class="font-medium">{{ contact.city or '-' }}</p>
+        </div>
+    </div>
+    
+    <!-- Dirección -->
+    {% if contact.address %}
+    <div class="mb-6">
+        <h3 class="text-lg font-bold mb-2">Dirección</h3>
+        <div class="bg-gray-50 p-4 rounded">
+            <p>{{ contact.address }}</p>
+            {% if contact.postal_code %}
+            <p class="text-sm text-gray-600">Código Postal: {{ contact.postal_code }}</p>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Información de Zoho -->
+    <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="bg-gray-50 p-4 rounded">
+            <p class="text-sm text-gray-600">Account Zoho ID</p>
+            <p class="font-mono text-sm">{{ contact.account_name_id or '-' }}</p>
+        </div>
+        <div class="bg-gray-50 p-4 rounded">
+            <p class="text-sm text-gray-600">Owner Zoho ID</p>
+            <p class="font-mono text-sm">{{ contact.owner_id or '-' }}</p>
+        </div>
+        <div class="bg-gray-50 p-4 rounded">
+            <p class="text-sm text-gray-600">Origen Comercial</p>
+            <p class="font-medium">{{ contact.commercial_origin or '-' }}</p>
+        </div>
+        <div class="bg-gray-50 p-4 rounded">
+            <p class="text-sm text-gray-600">Tienda</p>
+            <p class="font-medium">{{ contact.store or '-' }}</p>
+        </div>
+    </div>
+    
+    <!-- Timestamps -->
+    <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="bg-gray-50 p-4 rounded">
+            <p class="text-sm text-gray-600">Creado</p>
+            <p class="font-mono text-sm">{{ contact.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+        </div>
+        <div class="bg-gray-50 p-4 rounded">
+            <p class="text-sm text-gray-600">Actualizado</p>
+            <p class="font-mono text-sm">{{ contact.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+        </div>
+    </div>
+    
+    <!-- Logs Relacionados -->
+    {% if related_logs %}
+    <div>
+        <h3 class="text-lg font-bold mb-2">Logs Relacionados (Últimos 10)</h3>
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white border">
+                <thead>
+                    <tr class="bg-gray-100">
+                        <th class="py-2 px-4 text-left text-sm">ID</th>
+                        <th class="py-2 px-4 text-left text-sm">Endpoint</th>
+                        <th class="py-2 px-4 text-left text-sm">Método</th>
+                        <th class="py-2 px-4 text-left text-sm">Status</th>
+                        <th class="py-2 px-4 text-left text-sm">Fecha</th>
+                        <th class="py-2 px-4 text-left text-sm">Acción</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in related_logs %}
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="py-2 px-4 text-sm">{{ log.id }}</td>
+                        <td class="py-2 px-4 text-sm">{{ log.endpoint }}</td>
+                        <td class="py-2 px-4 text-sm">
+                            <span class="px-2 py-1 rounded text-xs {% if log.method == 'POST' %}bg-green-100 text-green-800{% elif log.method == 'PUT' %}bg-blue-100 text-blue-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {{ log.method }}
+                            </span>
+                        </td>
+                        <td class="py-2 px-4 text-sm">
+                            <span class="px-2 py-1 rounded text-xs {% if log.success %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                                {{ log.response_status_code }}
+                            </span>
+                        </td>
+                        <td class="py-2 px-4 text-sm">{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                        <td class="py-2 px-4 text-sm">
+                            <a href="/admin/logs/{{ log.id }}" class="text-blue-600 hover:text-blue-800">Ver</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

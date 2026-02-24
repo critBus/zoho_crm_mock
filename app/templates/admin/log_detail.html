@@ -1,0 +1,153 @@
+{% extends "admin/base.html" %}
+
+{% block title %}Detalle de Log #{{ log.id }} - Zoho Mock Admin{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-2xl font-bold">Detalle de Log #{{ log.id }}</h2>
+        <a href="/admin/logs" class="text-blue-600 hover:text-blue-800">← Volver a logs</a>
+    </div>
+    
+    <!-- Información General -->
+    <div class="grid grid-cols-2 gap-4 mb-6">
+        <div class="bg-gray-50 p-4 rounded">
+            <p class="text-sm text-gray-600">Request ID</p>
+            <p class="font-mono text-sm">{{ log.request_id }}</p>
+        </div>
+        <div class="bg-gray-50 p-4 rounded">
+            <p class="text-sm text-gray-600">Endpoint</p>
+            <p class="font-mono text-sm">{{ log.endpoint }}</p>
+        </div>
+        <div class="bg-gray-50 p-4 rounded">
+            <p class="text-sm text-gray-600">Método</p>
+            <p class="font-mono text-sm">
+                <span class="px-2 py-1 rounded text-xs {% if log.method == 'POST' %}bg-green-100 text-green-800{% elif log.method == 'PUT' %}bg-blue-100 text-blue-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                    {{ log.method }}
+                </span>
+            </p>
+        </div>
+        <div class="bg-gray-50 p-4 rounded">
+            <p class="text-sm text-gray-600">Status Code</p>
+            <p class="font-mono text-sm">
+                <span class="px-2 py-1 rounded text-xs {% if log.success %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
+                    {{ log.response_status_code }}
+                </span>
+            </p>
+        </div>
+        <div class="bg-gray-50 p-4 rounded">
+            <p class="text-sm text-gray-600">Tiempo de Respuesta</p>
+            <p class="font-mono text-sm">{{ log.response_time_ms }} ms</p>
+        </div>
+        <div class="bg-gray-50 p-4 rounded">
+            <p class="text-sm text-gray-600">Fecha</p>
+            <p class="font-mono text-sm">{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+        </div>
+    </div>
+    
+    <!-- Zoho IDs Relacionados -->
+    {% if log.zoho_contact_id or log.zoho_deal_id %}
+    <div class="mb-6">
+        <h3 class="text-lg font-bold mb-2">IDs de Zoho Relacionados</h3>
+        <div class="grid grid-cols-2 gap-4">
+            {% if log.zoho_contact_id %}
+            <div class="bg-blue-50 p-4 rounded">
+                <p class="text-sm text-gray-600">Contact ID</p>
+                <p class="font-mono text-sm">{{ log.zoho_contact_id }}</p>
+                <a href="/admin/contacts?zoho_id={{ log.zoho_contact_id }}" class="text-blue-600 text-xs hover:underline">Ver contactos</a>
+            </div>
+            {% endif %}
+            {% if log.zoho_deal_id %}
+            <div class="bg-green-50 p-4 rounded">
+                <p class="text-sm text-gray-600">Deal ID</p>
+                <p class="font-mono text-sm">{{ log.zoho_deal_id }}</p>
+                <a href="/admin/deals?zoho_id={{ log.zoho_deal_id }}" class="text-green-600 text-xs hover:underline">Ver deals</a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Request Details -->
+    <div class="mb-6">
+        <h3 class="text-lg font-bold mb-2">Request</h3>
+        <div class="bg-gray-900 text-green-400 p-4 rounded overflow-x-auto">
+            <pre class="text-xs">{{ log.url }}</pre>
+        </div>
+        
+        {% if log.headers %}
+        <div class="mt-4">
+            <h4 class="text-md font-bold mb-2">Headers</h4>
+            <div class="bg-gray-900 text-green-400 p-4 rounded overflow-x-auto">
+                <pre class="text-xs">{{ log.headers | tojson(indent=2) }}</pre>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if log.body %}
+        <div class="mt-4">
+            <h4 class="text-md font-bold mb-2">Body</h4>
+            <div class="bg-gray-900 text-green-400 p-4 rounded overflow-x-auto">
+                <pre class="text-xs">{{ log.body | tojson(indent=2) }}</pre>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if log.query_params %}
+        <div class="mt-4">
+            <h4 class="text-md font-bold mb-2">Query Params</h4>
+            <div class="bg-gray-900 text-green-400 p-4 rounded overflow-x-auto">
+                <pre class="text-xs">{{ log.query_params | tojson(indent=2) }}</pre>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Response Details -->
+    <div class="mb-6">
+        <h3 class="text-lg font-bold mb-2">Response</h3>
+        
+        {% if log.response_headers %}
+        <div class="mb-4">
+            <h4 class="text-md font-bold mb-2">Response Headers</h4>
+            <div class="bg-gray-900 text-green-400 p-4 rounded overflow-x-auto">
+                <pre class="text-xs">{{ log.response_headers | tojson(indent=2) }}</pre>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% if log.response_body %}
+        <div>
+            <h4 class="text-md font-bold mb-2">Response Body</h4>
+            <div class="bg-gray-900 text-green-400 p-4 rounded overflow-x-auto">
+                <pre class="text-xs">{{ log.response_body | tojson(indent=2) }}</pre>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Error Message -->
+    {% if log.error_message %}
+    <div class="bg-red-50 border border-red-200 p-4 rounded mb-6">
+        <h4 class="text-md font-bold text-red-800 mb-2">Error Message</h4>
+        <p class="text-red-700 text-sm">{{ log.error_message }}</p>
+    </div>
+    {% endif %}
+    
+    <!-- Archivos TXT -->
+    <div class="bg-yellow-50 border border-yellow-200 p-4 rounded">
+        <h4 class="text-md font-bold text-yellow-800 mb-2">Archivos de Log TXT</h4>
+        <p class="text-yellow-700 text-sm mb-2">Los archivos se encuentran en:</p>
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <p class="text-xs text-gray-600">Request</p>
+                <p class="font-mono text-xs">logs/requests/{{ log.created_at.strftime('%Y%m%d') }}_*_{{ log.request_id }}_request.txt</p>
+            </div>
+            <div>
+                <p class="text-xs text-gray-600">Response</p>
+                <p class="font-mono text-xs">logs/responses/{{ log.created_at.strftime('%Y%m%d') }}_*_{{ log.request_id }}_response.txt</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

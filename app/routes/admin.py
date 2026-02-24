@@ -251,3 +251,88 @@ async def admin_stats(request: Request, db: Session = Depends(get_db)):
         "request": request,
         "stats": stats
     })
+
+# ... (código existente) ...
+
+@router.get("/admin/logs/{log_id}", response_class=HTMLResponse)
+async def admin_log_detail(
+    request: Request,
+    log_id: int,
+    db: Session = Depends(get_db),
+):
+    """Vista de detalle de un log específico"""
+    if not check_admin_auth(request):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/admin/login", status_code=303)
+    
+    log = db.query(ApiLog).filter(ApiLog.id == log_id).first()
+    
+    if not log:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Log not found")
+    
+    return templates.TemplateResponse("admin/log_detail.html", {
+        "request": request,
+        "log": log,
+        # "json": json
+    })
+
+
+@router.get("/admin/contacts/{contact_id}", response_class=HTMLResponse)
+async def admin_contact_detail(
+    request: Request,
+    contact_id: int,
+    db: Session = Depends(get_db),
+):
+    """Vista de detalle de un contacto específico"""
+    if not check_admin_auth(request):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/admin/login", status_code=303)
+    
+    contact = db.query(ZohoContact).filter(ZohoContact.id == contact_id).first()
+    
+    if not contact:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    # Obtener logs relacionados
+    related_logs = db.query(ApiLog).filter(
+        ApiLog.zoho_contact_id == contact.zoho_id
+    ).order_by(ApiLog.created_at.desc()).limit(10).all()
+    
+    return templates.TemplateResponse("admin/contact_detail.html", {
+        "request": request,
+        "contact": contact,
+        "related_logs": related_logs,
+        # "json": json
+    })
+
+
+@router.get("/admin/deals/{deal_id}", response_class=HTMLResponse)
+async def admin_deal_detail(
+    request: Request,
+    deal_id: int,
+    db: Session = Depends(get_db),
+):
+    """Vista de detalle de un deal específico"""
+    if not check_admin_auth(request):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/admin/login", status_code=303)
+    
+    deal = db.query(ZohoDeal).filter(ZohoDeal.id == deal_id).first()
+    
+    if not deal:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Deal not found")
+    
+    # Obtener logs relacionados
+    related_logs = db.query(ApiLog).filter(
+        ApiLog.zoho_deal_id == deal.zoho_id
+    ).order_by(ApiLog.created_at.desc()).limit(10).all()
+    
+    return templates.TemplateResponse("admin/deal_detail.html", {
+        "request": request,
+        "deal": deal,
+        "related_logs": related_logs,
+        # "json": json
+    })
