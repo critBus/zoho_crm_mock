@@ -28,8 +28,6 @@ async def log_api_call(
 ):
     """Registra llamada API en DB y archivos TXT"""
     request_id = ApiLogger.generate_request_id()
-    
-    # Headers
     headers = dict(request.headers)
     
     # Log request
@@ -127,24 +125,33 @@ async def login(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/Contacts")
 async def create_contact(request: Request, db: Session = Depends(get_db)):
-    """Crea un contacto en Zoho CRM"""
+    """
+    Crea un contacto en Zoho CRM
+    Formato de respuesta igual al Zoho real
+    """
     start_time = time.time()
     
     try:
         body = await request.json()
         contact_data = body.get("data", [{}])[0]
         
-        contact, is_new = ZohoMockService.create_contact(db, contact_data)
+        contact, is_new, code, message = ZohoMockService.create_contact(db, contact_data)
         
+        # Construir respuesta EXACTAMENTE como Zoho real
         response_body = {
-            "code": "SUCCESS",
-            "details": {
-                "id": contact.zoho_id,
-                "created_time": contact.created_at.isoformat(),
-                "modified_time": contact.updated_at.isoformat()
-            },
-            "message": "Contact created successfully",
-            "status": "success"
+            "data": [
+                {
+                    "code": code,
+                    "status": "success" if code == "SUCCESS" else "error",
+                    "details": ZohoMockService._build_details_response(
+                        zoho_id=contact.zoho_id,
+                        created_at=contact.created_at,
+                        modified_at=contact.updated_at,
+                        include_creator=True
+                    ),
+                    "message": message
+                }
+            ]
         }
         
         response_time_ms = int((time.time() - start_time) * 1000)
@@ -165,13 +172,22 @@ async def create_contact(request: Request, db: Session = Depends(get_db)):
     
     except Exception as e:
         response_time_ms = int((time.time() - start_time) * 1000)
+        error_response = {
+            "data": [
+                {
+                    "code": "ERROR",
+                    "status": "error",
+                    "message": str(e)
+                }
+            ]
+        }
         await log_api_call(
             db=db,
             request=request,
             endpoint="/Contacts",
             method="POST",
             response_status=500,
-            response_body={"error": str(e)},
+            response_body=error_response,
             response_time_ms=response_time_ms,
             success=False,
             error_message=str(e)
@@ -181,7 +197,10 @@ async def create_contact(request: Request, db: Session = Depends(get_db)):
 
 @router.put("/Contacts")
 async def update_contact(request: Request, db: Session = Depends(get_db)):
-    """Actualiza un contacto en Zoho CRM"""
+    """
+    Actualiza un contacto en Zoho CRM
+    Formato de respuesta igual al Zoho real
+    """
     start_time = time.time()
     
     try:
@@ -190,26 +209,58 @@ async def update_contact(request: Request, db: Session = Depends(get_db)):
         zoho_id = contact_data.get("id")
         
         if not zoho_id:
-            raise HTTPException(status_code=400, detail="Contact ID is required")
+            error_response = {
+                "data": [
+                    {
+                        "code": "REQUIRED_FIELD_MISSING",
+                        "status": "error",
+                        "message": "Contact ID is required"
+                    }
+                ]
+            }
+            response_time_ms = int((time.time() - start_time) * 1000)
+            await log_api_call(
+                db=db,
+                request=request,
+                endpoint="/Contacts",
+                method="PUT",
+                body=body,
+                response_status=400,
+                response_body=error_response,
+                response_time_ms=response_time_ms,
+                success=False,
+                error_message="Contact ID is required"
+            )
+            return error_response
         
-        contact = ZohoMockService.update_contact(db, zoho_id, contact_data)
+        contact, code, message = ZohoMockService.update_contact(db, zoho_id, contact_data)
         
         if not contact:
             response_body = {
-                "code": "NOT_FOUND",
-                "message": f"Contact with ID {zoho_id} not found",
-                "status": "error"
+                "data": [
+                    {
+                        "code": code,
+                        "status": "error",
+                        "message": message
+                    }
+                ]
             }
             status_code = 404
         else:
             response_body = {
-                "code": "SUCCESS",
-                "details": {
-                    "id": contact.zoho_id,
-                    "modified_time": contact.updated_at.isoformat()
-                },
-                "message": "Contact updated successfully",
-                "status": "success"
+                "data": [
+                    {
+                        "code": code,
+                        "status": "success",
+                        "details": ZohoMockService._build_details_response(
+                            zoho_id=contact.zoho_id,
+                            created_at=contact.created_at,
+                            modified_at=contact.updated_at,
+                            include_creator=True
+                        ),
+                        "message": message
+                    }
+                ]
             }
             status_code = 200
         
@@ -233,13 +284,22 @@ async def update_contact(request: Request, db: Session = Depends(get_db)):
         raise
     except Exception as e:
         response_time_ms = int((time.time() - start_time) * 1000)
+        error_response = {
+            "data": [
+                {
+                    "code": "ERROR",
+                    "status": "error",
+                    "message": str(e)
+                }
+            ]
+        }
         await log_api_call(
             db=db,
             request=request,
             endpoint="/Contacts",
             method="PUT",
             response_status=500,
-            response_body={"error": str(e)},
+            response_body=error_response,
             response_time_ms=response_time_ms,
             success=False,
             error_message=str(e)
@@ -249,7 +309,10 @@ async def update_contact(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/Deals")
 async def create_deal(request: Request, db: Session = Depends(get_db)):
-    """Crea un deal en Zoho CRM"""
+    """
+    Crea un deal en Zoho CRM
+    Formato de respuesta igual al Zoho real
+    """
     start_time = time.time()
     
     try:
@@ -265,15 +328,21 @@ async def create_deal(request: Request, db: Session = Depends(get_db)):
         
         deal = ZohoMockService.create_deal(db, deal_data, contact)
         
+        # Construir respuesta EXACTAMENTE como Zoho real
         response_body = {
-            "code": "SUCCESS",
-            "details": {
-                "id": deal.zoho_id,
-                "created_time": deal.created_at.isoformat(),
-                "modified_time": deal.updated_at.isoformat()
-            },
-            "message": "Deal created successfully",
-            "status": "success"
+            "data": [
+                {
+                    "code": "SUCCESS",
+                    "status": "success",
+                    "details": ZohoMockService._build_details_response(
+                        zoho_id=deal.zoho_id,
+                        created_at=deal.created_at,
+                        modified_at=deal.updated_at,
+                        include_creator=True
+                    ),
+                    "message": "record added"
+                }
+            ]
         }
         
         response_time_ms = int((time.time() - start_time) * 1000)
@@ -295,13 +364,22 @@ async def create_deal(request: Request, db: Session = Depends(get_db)):
     
     except Exception as e:
         response_time_ms = int((time.time() - start_time) * 1000)
+        error_response = {
+            "data": [
+                {
+                    "code": "ERROR",
+                    "status": "error",
+                    "message": str(e)
+                }
+            ]
+        }
         await log_api_call(
             db=db,
             request=request,
             endpoint="/Deals",
             method="POST",
             response_status=500,
-            response_body={"error": str(e)},
+            response_body=error_response,
             response_time_ms=response_time_ms,
             success=False,
             error_message=str(e)
@@ -311,7 +389,10 @@ async def create_deal(request: Request, db: Session = Depends(get_db)):
 
 @router.put("/Deals")
 async def update_deal(request: Request, db: Session = Depends(get_db)):
-    """Actualiza un deal en Zoho CRM"""
+    """
+    Actualiza un deal en Zoho CRM
+    Formato de respuesta igual al Zoho real
+    """
     start_time = time.time()
     
     try:
@@ -324,29 +405,31 @@ async def update_deal(request: Request, db: Session = Depends(get_db)):
             
             if not zoho_id:
                 results.append({
-                    "code": "ERROR",
-                    "message": "Deal ID is required",
-                    "status": "error"
+                    "code": "REQUIRED_FIELD_MISSING",
+                    "status": "error",
+                    "message": "Deal ID is required"
                 })
                 continue
             
-            deal = ZohoMockService.update_deal(db, zoho_id, deal_data)
+            deal, code, message = ZohoMockService.update_deal(db, zoho_id, deal_data)
             
             if not deal:
                 results.append({
-                    "code": "NOT_FOUND",
-                    "message": f"Deal with ID {zoho_id} not found",
-                    "status": "error"
+                    "code": code,
+                    "status": "error",
+                    "message": message
                 })
             else:
                 results.append({
-                    "code": "SUCCESS",
-                    "details": {
-                        "id": deal.zoho_id,
-                        "modified_time": deal.updated_at.isoformat()
-                    },
-                    "message": "Deal updated successfully",
-                    "status": "success"
+                    "code": code,
+                    "status": "success",
+                    "details": ZohoMockService._build_details_response(
+                        zoho_id=deal.zoho_id,
+                        created_at=deal.created_at,
+                        modified_at=deal.updated_at,
+                        include_creator=True
+                    ),
+                    "message": message
                 })
         
         response_body = {
@@ -370,13 +453,22 @@ async def update_deal(request: Request, db: Session = Depends(get_db)):
     
     except Exception as e:
         response_time_ms = int((time.time() - start_time) * 1000)
+        error_response = {
+            "data": [
+                {
+                    "code": "ERROR",
+                    "status": "error",
+                    "message": str(e)
+                }
+            ]
+        }
         await log_api_call(
             db=db,
             request=request,
             endpoint="/Deals",
             method="PUT",
             response_status=500,
-            response_body={"error": str(e)},
+            response_body=error_response,
             response_time_ms=response_time_ms,
             success=False,
             error_message=str(e)

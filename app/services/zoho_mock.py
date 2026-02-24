@@ -9,9 +9,13 @@ from app.config import ZOHO_MOCK_CONFIG
 class ZohoMockService:
     """Servicio que simula el comportamiento de Zoho CRM API"""
     
+    # Owner y Created_By defaults (basado en tus logs)
+    DEFAULT_OWNER_ID = "711111000000111111"
+    DEFAULT_OWNER_NAME = "Zoho Defualt Owner"
+    
     @staticmethod
     def generate_zoho_id(prefix: str = "CRM") -> str:
-        """Genera un ID único de Zoho"""
+        """Genera un ID único de Zoho (15 dígitos como en los logs reales)"""
         random_part = ''.join(random.choices(string.digits, k=15))
         return f"{prefix}{random_part}"
     
@@ -21,7 +25,6 @@ class ZohoMockService:
         token = db.query(ApiToken).filter(ApiToken.is_active == True).first()
         
         if not token or (token.expires_at and token.expires_at < datetime.utcnow()):
-            # Crear nuevo token
             if token:
                 token.is_active = False
                 db.add(token)
@@ -41,8 +44,37 @@ class ZohoMockService:
         return token
     
     @staticmethod
-    def create_contact(db: Session, contact_data: Dict[str, Any]) -> Tuple[ZohoContact, bool]:
-        """Crea o actualiza un contacto"""
+    def _build_details_response(
+        zoho_id: str, 
+        created_at: datetime, 
+        modified_at: datetime,
+        include_creator: bool = True
+    ) -> Dict[str, Any]:
+        """Construye el objeto details igual que Zoho real"""
+        details = {
+            "id": zoho_id,
+            "Created_Time": created_at.strftime("%Y-%m-%dT%H:%M:%S-05:00"),
+            "Modified_Time": modified_at.strftime("%Y-%m-%dT%H:%M:%S-05:00"),
+        }
+        
+        if include_creator:
+            details["Created_By"] = {
+                "id": ZohoMockService.DEFAULT_OWNER_ID,
+                "name": ZohoMockService.DEFAULT_OWNER_NAME
+            }
+            details["Modified_By"] = {
+                "id": ZohoMockService.DEFAULT_OWNER_ID,
+                "name": ZohoMockService.DEFAULT_OWNER_NAME
+            }
+        
+        return details
+    
+    @staticmethod
+    def create_contact(db: Session, contact_data: Dict[str, Any]) -> Tuple[ZohoContact, bool, str]:
+        """
+        Crea o actualiza un contacto
+        Returns: (contact, is_new, response_code)
+        """
         email = contact_data.get("Email", "")
         phone = contact_data.get("Mobile", "")
         
@@ -73,6 +105,8 @@ class ZohoMockService:
                 commercial_origin=contact_data.get("Origen_Comercial", ""),
             )
             db.add(contact)
+            response_code = "SUCCESS"
+            message = "record added"
         else:
             contact = existing_contact
             # Actualizar campos
@@ -85,26 +119,27 @@ class ZohoMockService:
             contact.address = contact_data.get("Direcci_n", contact.address)
             contact.postal_code = contact_data.get("Mailing_Zip", contact.postal_code)
             contact.updated_at = datetime.utcnow()
+            
+            response_code = "DUPLICATE_DATA"
+            message = "duplicate data"
         
         db.commit()
         db.refresh(contact)
         
-        return contact, is_new
+        return contact, is_new, response_code, message
     
     @staticmethod
-    def update_contact(db: Session, zoho_id: str, contact_data: Dict[str, Any]) -> Optional[ZohoContact]:
-        """Actualiza un contacto existente"""
+    def update_contact(db: Session, zoho_id: str, contact_data: Dict[str, Any]) -> Tuple[Optional[ZohoContact], str, str]:
+        """
+        Actualiza un contacto existente
+        Returns: (contact, response_code, message)
+        """
         contact = db.query(ZohoContact).filter(ZohoContact.zoho_id == zoho_id).first()
         
         if not contact:
-            return None
+            return None, "NOT_FOUND", f"Contact with ID {zoho_id} not found"
         
         # Actualizar campos permitidos
-        updatable_fields = [
-            "first_name", "last_name", "phone", "country", "state", 
-            "city", "address", "postal_code", "email"
-        ]
-        
         field_mapping = {
             "First_Name": "first_name",
             "Last_Name": "last_name",
@@ -119,14 +154,14 @@ class ZohoMockService:
         }
         
         for zoho_field, model_field in field_mapping.items():
-            if zoho_field in contact_data and model_field in updatable_fields:
+            if zoho_field in contact_data and model_field in ["first_name", "last_name", "phone", "country", "state", "city", "address", "postal_code", "email"]:
                 setattr(contact, model_field, contact_data[zoho_field])
         
         contact.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(contact)
         
-        return contact
+        return contact, "SUCCESS", "record updated"
     
     @staticmethod
     def create_deal(db: Session, deal_data: Dict[str, Any], contact: Optional[ZohoContact] = None) -> ZohoDeal:
@@ -153,18 +188,17 @@ class ZohoMockService:
         return deal
     
     @staticmethod
-    def update_deal(db: Session, zoho_id: str, deal_data: Dict[str, Any]) -> Optional[ZohoDeal]:
-        """Actualiza un deal existente"""
+    def update_deal(db: Session, zoho_id: str, deal_data: Dict[str, Any]) -> Tuple[Optional[ZohoDeal], str, str]:
+        """
+        Actualiza un deal existente
+        Returns: (deal, response_code, message)
+        """
         deal = db.query(ZohoDeal).filter(ZohoDeal.zoho_id == zoho_id).first()
         
         if not deal:
-            return None
+            return None, "NOT_FOUND", f"Deal with ID {zoho_id} not found"
         
         # Actualizar campos permitidos
-        updatable_fields = [
-            "deal_name", "amount", "stage", "commercial_origin", "pipeline"
-        ]
-        
         field_mapping = {
             "Deal_Name": "deal_name",
             "Amount": "amount",
@@ -175,7 +209,7 @@ class ZohoMockService:
         }
         
         for zoho_field, model_field in field_mapping.items():
-            if zoho_field in deal_data and model_field in updatable_fields:
+            if zoho_field in deal_data and model_field in ["deal_name", "amount", "stage", "commercial_origin", "pipeline"]:
                 setattr(deal, model_field, deal_data[zoho_field])
         
         # Actualizar deal_data completo
@@ -185,7 +219,7 @@ class ZohoMockService:
         db.commit()
         db.refresh(deal)
         
-        return deal
+        return deal, "SUCCESS", "record updated"
     
     @staticmethod
     def get_contact_by_id(db: Session, zoho_id: str) -> Optional[ZohoContact]:
