@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional, List, Tuple
 from sqlalchemy.orm import Session
 from app.models import ZohoContact, ZohoDeal, ApiToken
 from app.config import ZOHO_MOCK_CONFIG
+from app.models import ZohoContact, ZohoDeal, ZohoLead, ApiToken
 
 class ZohoMockService:
     """Servicio que simula el comportamiento de Zoho CRM API"""
@@ -230,3 +231,177 @@ class ZohoMockService:
     def get_deal_by_id(db: Session, zoho_id: str) -> Optional[ZohoDeal]:
         """Obtiene un deal por su Zoho ID"""
         return db.query(ZohoDeal).filter(ZohoDeal.zoho_id == zoho_id).first()
+    
+
+
+
+    # Agregar después de get_deal_by_id
+
+    @staticmethod
+    def create_lead(db: Session, lead_data: Dict[str, Any]) -> Tuple[ZohoLead, bool, str, str]:
+        """
+        Crea o actualiza un lead
+        Returns: (lead, is_new, response_code, message)
+        """
+        email = lead_data.get("Email", "")
+        phone = lead_data.get("Phone", "")
+        mobile = lead_data.get("Mobile", "")
+        ec_id = lead_data.get("EC_ID", "")
+        
+        # Buscar lead existente por email, teléfono o EC_ID
+        existing_lead = None
+        if email:
+            existing_lead = db.query(ZohoLead).filter(ZohoLead.email == email).first()
+        if not existing_lead and mobile:
+            existing_lead = db.query(ZohoLead).filter(ZohoLead.mobile == mobile).first()
+        if not existing_lead and ec_id:
+            existing_lead = db.query(ZohoLead).filter(ZohoLead.ec_id == ec_id).first()
+        
+        is_new = existing_lead is None
+        
+        if is_new:
+            zoho_id = ZohoMockService.generate_zoho_id("LEAD")
+            lead = ZohoLead(
+                zoho_id=zoho_id,
+                email=email,
+                first_name=lead_data.get("First_Name", ""),
+                last_name=lead_data.get("Last_Name", ""),
+                phone=phone,
+                mobile=mobile,
+                country=lead_data.get("Pais", "") or lead_data.get("Country", ""),
+                state=lead_data.get("OCPI_state", "") or lead_data.get("State", ""),
+                city=lead_data.get("OCPI_City", "") or lead_data.get("City", ""),
+                address=lead_data.get("Direccion", "") or lead_data.get("Address", ""),
+                postal_code=lead_data.get("OCPI_Zip_Code", "") or lead_data.get("Zip_Code", ""),
+                
+                # Campos específicos de Leads
+                ec_id=ec_id,
+                company=lead_data.get("Company", ""),
+                title=lead_data.get("Title", ""),
+                industry=lead_data.get("Industry", ""),
+                lead_source=lead_data.get("Lead_Source", ""),
+                lead_status=lead_data.get("Lead_Status", "New"),
+                rating=lead_data.get("Rating", ""),
+                
+                # Campos personalizados de tus logs
+                plataforma=lead_data.get("Plataforma", ""),
+                tipo_cliente=lead_data.get("tipo_cliente", ""),
+                origen_comercial=lead_data.get("Origen_Comercial", ""),
+                tipo_de_servicio=lead_data.get("Tipo_de_Servicio", ""),
+                agencia_enjoy_pro=lead_data.get("Agencia_Enjoy_PRO", ""),
+                agencia_padre=lead_data.get("Agencia_Padre", ""),
+                vendedor=lead_data.get("Vendedor", ""),
+                mercado=str(lead_data.get("Mercados", [])),
+                importe=str(lead_data.get("Importe", "")),
+                estado_expediente=lead_data.get("Estado_Expediente", ""),
+                estado_de_la_reserva=lead_data.get("Estado_de_la_Reserva", ""),
+                
+                lead_data=lead_data,
+                owner_id=lead_data.get("Owner", {}).get("id") if isinstance(lead_data.get("Owner"), dict) else None,
+                commercial_origin=lead_data.get("Origen_Comercial", ""),
+            )
+            db.add(lead)
+            response_code = "SUCCESS"
+            message = "record added"
+        else:
+            lead = existing_lead
+            # Actualizar campos
+            lead.first_name = lead_data.get("First_Name", lead.first_name)
+            lead.last_name = lead_data.get("Last_Name", lead.last_name)
+            lead.phone = phone or lead.phone
+            lead.mobile = mobile or lead.mobile
+            lead.country = lead_data.get("Pais", lead.country)
+            lead.state = lead_data.get("OCPI_state", lead.state)
+            lead.city = lead_data.get("OCPI_City", lead.city)
+            lead.address = lead_data.get("Direccion", lead.address)
+            lead.postal_code = lead_data.get("OCPI_Zip_Code", lead.postal_code)
+            
+            # Actualizar campos personalizados
+            lead.plataforma = lead_data.get("Plataforma", lead.plataforma)
+            lead.tipo_cliente = lead_data.get("tipo_cliente", lead.tipo_cliente)
+            lead.origen_comercial = lead_data.get("Origen_Comercial", lead.origen_comercial)
+            lead.tipo_de_servicio = lead_data.get("Tipo_de_Servicio", lead.tipo_de_servicio)
+            lead.agencia_enjoy_pro = lead_data.get("Agencia_Enjoy_PRO", lead.agencia_enjoy_pro)
+            lead.agencia_padre = lead_data.get("Agencia_Padre", lead.agencia_padre)
+            lead.vendedor = lead_data.get("Vendedor", lead.vendedor)
+            lead.estado_expediente = lead_data.get("Estado_Expediente", lead.estado_expediente)
+            lead.estado_de_la_reserva = lead_data.get("Estado_de_la_Reserva", lead.estado_de_la_reserva)
+            
+            # Actualizar lead_data completo
+            lead.lead_data = {**lead.lead_data, **lead_data}
+            lead.updated_at = datetime.utcnow()
+            
+            response_code = "DUPLICATE_DATA"
+            message = "duplicate data"
+        
+        db.commit()
+        db.refresh(lead)
+        return lead, is_new, response_code, message
+
+    @staticmethod
+    def update_lead(db: Session, zoho_id: str, lead_data: Dict[str, Any]) -> Tuple[Optional[ZohoLead], str, str]:
+        """
+        Actualiza un lead existente
+        Returns: (lead, response_code, message)
+        """
+        lead = db.query(ZohoLead).filter(ZohoLead.zoho_id == zoho_id).first()
+        
+        if not lead:
+            return None, "NOT_FOUND", f"Lead with ID {zoho_id} not found"
+        
+        # Mapeo de campos de Zoho a modelo
+        field_mapping = {
+            "First_Name": "first_name",
+            "Last_Name": "last_name",
+            "Mobile": "mobile",
+            "Phone": "phone",
+            "Email": "email",
+            "Pais": "country",
+            "Country": "country",
+            "OCPI_state": "state",
+            "State": "state",
+            "OCPI_City": "city",
+            "City": "city",
+            "Direccion": "address",
+            "Address": "address",
+            "OCPI_Zip_Code": "postal_code",
+            "Zip_Code": "postal_code",
+            "Company": "company",
+            "Title": "title",
+            "Industry": "industry",
+            "Lead_Source": "lead_source",
+            "Lead_Status": "lead_status",
+            "Rating": "rating",
+            "Plataforma": "plataforma",
+            "tipo_cliente": "tipo_cliente",
+            "Origen_Comercial": "origen_comercial",
+            "Tipo_de_Servicio": "tipo_de_servicio",
+            "Agencia_Enjoy_PRO": "agencia_enjoy_pro",
+            "Agencia_Padre": "agencia_padre",
+            "Vendedor": "vendedor",
+            "Estado_Expediente": "estado_expediente",
+            "Estado_de_la_Reserva": "estado_de_la_reserva",
+        }
+        
+        for zoho_field, model_field in field_mapping.items():
+            if zoho_field in lead_data and hasattr(lead, model_field):
+                setattr(lead, model_field, lead_data[zoho_field])
+        
+        # Actualizar lead_data completo
+        lead.lead_data = {**lead.lead_data, **lead_data}
+        lead.updated_at = datetime.utcnow()
+        
+        db.commit()
+        db.refresh(lead)
+        
+        return lead, "SUCCESS", "record updated"
+
+    @staticmethod
+    def get_lead_by_id(db: Session, zoho_id: str) -> Optional[ZohoLead]:
+        """Obtiene un lead por su Zoho ID"""
+        return db.query(ZohoLead).filter(ZohoLead.zoho_id == zoho_id).first()
+
+    @staticmethod
+    def get_lead_by_email(db: Session, email: str) -> Optional[ZohoLead]:
+        """Obtiene un lead por email"""
+        return db.query(ZohoLead).filter(ZohoLead.email == email).first()

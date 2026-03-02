@@ -36,7 +36,8 @@ async def root():
             "token": "POST /token",
             "contacts": "POST /Contacts, PUT /Contacts",
             "deals": "POST /Deals, PUT /Deals",
-            "admin": "GET /admin/logs, /admin/contacts, /admin/deals, /admin/stats"
+            "leads": "POST /Leads, PUT /Leads",  # Nuevo
+            "admin": "GET /admin/logs, /admin/contacts, /admin/deals, /admin/leads, /admin/stats"
         }
     }
 

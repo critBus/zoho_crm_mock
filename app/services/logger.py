@@ -64,6 +64,7 @@ class ApiLogger:
         response_time_ms: int,
         zoho_contact_id: Optional[str] = None,
         zoho_deal_id: Optional[str] = None,
+        zoho_lead_id: Optional[str] = None,
         success: bool = True,
         error_message: Optional[str] = None
     ) -> str:
@@ -81,6 +82,7 @@ class ApiLogger:
             "response_time_ms": response_time_ms,
             "zoho_contact_id": zoho_contact_id,
             "zoho_deal_id": zoho_deal_id,
+            "zoho_lead_id": zoho_lead_id,
             "success": success,
             "error_message": error_message
         }

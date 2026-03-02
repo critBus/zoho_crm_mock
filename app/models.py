@@ -93,6 +93,7 @@ class ApiLog(Base):
     # Metadata
     zoho_contact_id = Column(String(50), ForeignKey("zoho_contacts.zoho_id"), nullable=True)
     zoho_deal_id = Column(String(50), ForeignKey("zoho_deals.zoho_id"), nullable=True)
+    zoho_lead_id = Column(String(50), ForeignKey("zoho_leads.zoho_id"), nullable=True)
     success = Column(Boolean, default=True)
     error_message = Column(Text, nullable=True)
     
@@ -102,6 +103,7 @@ class ApiLog(Base):
     # Relationships
     contact = relationship("ZohoContact", back_populates="api_logs")
     deal = relationship("ZohoDeal", back_populates="api_logs")
+    lead = relationship("ZohoLead", back_populates="api_logs")
     
     def __repr__(self):
         return f"<ApiLog(id={self.id}, endpoint={self.endpoint}, status={self.response_status_code})>"
@@ -121,3 +123,63 @@ class WebhookLog(Base):
     
     def __repr__(self):
         return f"<WebhookLog(id={self.id}, event_type={self.event_type})>"
+    
+
+
+# Agregar después de ZohoDeal
+class ZohoLead(Base):
+    __tablename__ = "zoho_leads"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    zoho_id = Column(String(50), unique=True, nullable=False, index=True)
+    
+    # Datos básicos del lead
+    email = Column(String(255), index=True)
+    first_name = Column(String(100))
+    last_name = Column(String(100))
+    phone = Column(String(50))
+    mobile = Column(String(50))
+    country = Column(String(100))
+    state = Column(String(100))
+    city = Column(String(100))
+    address = Column(Text)
+    postal_code = Column(String(20))
+    
+    # Datos específicos de Leads (basado en tus logs)
+    ec_id = Column(String(100), index=True)
+    company = Column(String(255))
+    title = Column(String(100))
+    industry = Column(String(100))
+    annual_revenue = Column(String(50))
+    number_of_employees = Column(String(20))
+    lead_source = Column(String(100))
+    lead_status = Column(String(100))
+    rating = Column(String(50))
+    
+    # Campos personalizados de tus logs
+    plataforma = Column(String(100))
+    tipo_cliente = Column(String(50))
+    origen_comercial = Column(String(255))
+    tipo_de_servicio = Column(String(100))
+    agencia_enjoy_pro = Column(String(255))
+    agencia_padre = Column(String(255))
+    vendedor = Column(String(100))
+    mercado = Column(String(100))
+    importe = Column(String(50))
+    estado_expediente = Column(String(100))
+    estado_de_la_reserva = Column(String(100))
+    
+    # Datos completos en JSON para flexibilidad
+    lead_data = Column(JSON)
+    
+    owner_id = Column(String(50))
+    commercial_origin = Column(String(100))
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    api_logs = relationship("ApiLog", back_populates="lead")
+    
+    def __repr__(self):
+        return f"<ZohoLead(zoho_id={self.zoho_id}, email={self.email})>"

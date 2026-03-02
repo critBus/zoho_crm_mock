@@ -74,3 +74,32 @@ class DealSchema(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+# Agregar después de Deal List
+
+# Lead
+class LeadInput(BaseModel):
+    data: List[Dict[str, Any]]
+    trigger: Optional[List[str]] = None
+
+class LeadResponse(BaseModel):
+    code: str
+    details: Dict[str, Any]
+    message: str
+    status: str
+
+class LeadSchema(BaseModel):
+    id: int
+    zoho_id: str
+    email: Optional[str]
+    first_name: Optional[str]
+    last_name: Optional[str]
+    phone: Optional[str]
+    mobile: Optional[str]
+    company: Optional[str]
+    lead_status: Optional[str]
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True

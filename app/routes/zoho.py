@@ -9,6 +9,8 @@ from app.models import ApiLog
 from app.services.zoho_mock import ZohoMockService
 from app.services.logger import ApiLogger
 from app.config import ZOHO_MOCK_CONFIG
+from app.models import ZohoLead
+from app.services.zoho_mock import ZohoMockService
 
 router = APIRouter()
 
@@ -23,6 +25,7 @@ async def log_api_call(
     response_time_ms: int = 0,
     zoho_contact_id: Optional[str] = None,
     zoho_deal_id: Optional[str] = None,
+    zoho_lead_id:Optional[str] = None,
     success: bool = True,
     error_message: Optional[str] = None
 ):
@@ -51,6 +54,7 @@ async def log_api_call(
         response_time_ms=response_time_ms,
         zoho_contact_id=zoho_contact_id,
         zoho_deal_id=zoho_deal_id,
+        zoho_lead_id=zoho_lead_id,
         success=success,
         error_message=error_message
     )
@@ -70,6 +74,7 @@ async def log_api_call(
         response_time_ms=response_time_ms,
         zoho_contact_id=zoho_contact_id,
         zoho_deal_id=zoho_deal_id,
+        zoho_lead_id=zoho_lead_id,
         success=success,
         error_message=error_message
     )
@@ -466,6 +471,177 @@ async def update_deal(request: Request, db: Session = Depends(get_db)):
             db=db,
             request=request,
             endpoint="/Deals",
+            method="PUT",
+            response_status=500,
+            response_body=error_response,
+            response_time_ms=response_time_ms,
+            success=False,
+            error_message=str(e)
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+# Agregar después de update_deal
+
+@router.post("/Leads")
+async def create_lead(request: Request, db: Session = Depends(get_db)):
+    """
+    Crea un lead en Zoho CRM
+    Formato de respuesta igual al Zoho real (basado en logs.txt)
+    """
+    start_time = time.time()
+    try:
+        body = await request.json()
+        lead_data_list = body.get("data", [])
+        triggers = body.get("trigger", [])
+        
+        results = []
+        
+        for lead_data in lead_data_list:
+            lead, is_new, code, message = ZohoMockService.create_lead(db, lead_data)
+            
+            # Construir respuesta EXACTAMENTE como Zoho real (ver logs.txt)
+            result = {
+                "code": code,
+                "status": "success" if code == "SUCCESS" else "error",
+                "details": ZohoMockService._build_details_response(
+                    zoho_id=lead.zoho_id,
+                    created_at=lead.created_at,
+                    modified_at=lead.updated_at,
+                    include_creator=True
+                ),
+                "message": message
+            }
+            results.append(result)
+        
+        response_body = {
+            "data": results
+        }
+        
+        response_time_ms = int((time.time() - start_time) * 1000)
+        
+        await log_api_call(
+            db=db,
+            request=request,
+            endpoint="/Leads",
+            method="POST",
+            body=body,
+            response_status=201,
+            response_body=response_body,
+            response_time_ms=response_time_ms,
+            zoho_lead_id=results[0]["details"]["id"] if results else None
+        )
+        
+        return response_body
+        
+    except Exception as e:
+        response_time_ms = int((time.time() - start_time) * 1000)
+        error_response = {
+            "data": [
+                {
+                    "code": "ERROR",
+                    "status": "error",
+                    "message": str(e)
+                }
+            ]
+        }
+        await log_api_call(
+            db=db,
+            request=request,
+            endpoint="/Leads",
+            method="POST",
+            response_status=500,
+            response_body=error_response,
+            response_time_ms=response_time_ms,
+            success=False,
+            error_message=str(e)
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/Leads")
+async def update_lead(request: Request, db: Session = Depends(get_db)):
+    """
+    Actualiza un lead en Zoho CRM
+    Formato de respuesta igual al Zoho real (similar a PUT /Deals)
+    """
+    start_time = time.time()
+    try:
+        body = await request.json()
+        lead_data_list = body.get("data", [])
+        triggers = body.get("trigger", [])
+        
+        results = []
+        
+        for lead_data in lead_data_list:
+            zoho_id = lead_data.get("id")
+            
+            if not zoho_id:
+                results.append({
+                    "code": "REQUIRED_FIELD_MISSING",
+                    "status": "error",
+                    "message": "Lead ID is required"
+                })
+                continue
+            
+            lead, code, message = ZohoMockService.update_lead(db, zoho_id, lead_data)
+            
+            if not lead:
+                results.append({
+                    "code": code,
+                    "status": "error",
+                    "message": message
+                })
+            else:
+                results.append({
+                    "code": code,
+                    "status": "success",
+                    "details": ZohoMockService._build_details_response(
+                        zoho_id=lead.zoho_id,
+                        created_at=lead.created_at,
+                        modified_at=lead.updated_at,
+                        include_creator=True
+                    ),
+                    "message": message
+                })
+        
+        response_body = {
+            "data": results
+        }
+        
+        response_time_ms = int((time.time() - start_time) * 1000)
+        
+        await log_api_call(
+            db=db,
+            request=request,
+            endpoint="/Leads",
+            method="PUT",
+            body=body,
+            response_status=200,
+            response_body=response_body,
+            response_time_ms=response_time_ms
+        )
+        
+        return response_body
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        response_time_ms = int((time.time() - start_time) * 1000)
+        error_response = {
+            "data": [
+                {
+                    "code": "ERROR",
+                    "status": "error",
+                    "message": str(e)
+                }
+            ]
+        }
+        await log_api_call(
+            db=db,
+            request=request,
+            endpoint="/Leads",
             method="PUT",
             response_status=500,
             response_body=error_response,

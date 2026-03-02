@@ -9,6 +9,7 @@ from app.models import ApiLog, ZohoContact, ZohoDeal, ApiToken
 from app.schemas import ApiLogListResponse, ContactSchema, DealSchema
 from app.config import ADMIN_USERNAME, ADMIN_PASSWORD
 from pathlib import Path
+from app.models import ZohoLead
 
 router = APIRouter()
 
@@ -335,4 +336,78 @@ async def admin_deal_detail(
         "deal": deal,
         "related_logs": related_logs,
         # "json": json
+    })
+
+
+
+# Agregar después de admin_deals
+@router.get("/admin/leads", response_class=HTMLResponse)
+async def admin_leads(
+    request: Request,
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=500),
+    email: Optional[str] = Query(None),
+    zoho_id: Optional[str] = Query(None),
+    lead_status: Optional[str] = Query(None),
+):
+    """Vista de leads de Zoho"""
+    if not check_admin_auth(request):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/admin/login", status_code=303)
+    
+    query = db.query(ZohoLead)
+    
+    if email:
+        query = query.filter(ZohoLead.email.contains(email))
+    if zoho_id:
+        query = query.filter(ZohoLead.zoho_id.contains(zoho_id))
+    if lead_status:
+        query = query.filter(ZohoLead.lead_status == lead_status)
+    
+    query = query.order_by(ZohoLead.created_at.desc())
+    
+    total = query.count()
+    leads = query.offset((page - 1) * page_size).limit(page_size).all()
+    
+    return templates.TemplateResponse("admin/leads.html", {
+        "request": request,
+        "leads": leads,
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": (total + page_size - 1) // page_size,
+        "filters": {
+            "email": email,
+            "zoho_id": zoho_id,
+            "lead_status": lead_status,
+        }
+    })
+
+@router.get("/admin/leads/{lead_id}", response_class=HTMLResponse)
+async def admin_lead_detail(
+    request: Request,
+    lead_id: int,
+    db: Session = Depends(get_db),
+):
+    """Vista de detalle de un lead específico"""
+    if not check_admin_auth(request):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/admin/login", status_code=303)
+    
+    lead = db.query(ZohoLead).filter(ZohoLead.id == lead_id).first()
+    
+    if not lead:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    # Obtener logs relacionados
+    related_logs = db.query(ApiLog).filter(
+        ApiLog.zoho_lead_id == lead.zoho_id
+    ).order_by(ApiLog.created_at.desc()).limit(10).all()
+    
+    return templates.TemplateResponse("admin/lead_detail.html", {
+        "request": request,
+        "lead": lead,
+        "related_logs": related_logs,
     })
