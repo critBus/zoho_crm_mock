@@ -35,6 +35,7 @@ class ZohoDeal(Base):
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     zoho_id = Column(String(50), unique=True, nullable=False, index=True)
+    ec_id = Column(String(100), index=True)
     deal_name = Column(String(255))
     amount = Column(String(50))
     stage = Column(String(100))

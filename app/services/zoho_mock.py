@@ -6,6 +6,9 @@ from sqlalchemy.orm import Session
 from app.models import ZohoContact, ZohoDeal, ApiToken
 from app.config import ZOHO_MOCK_CONFIG
 from app.models import ZohoContact, ZohoDeal, ZohoLead, ApiToken
+import re
+from typing import Dict, Any, Optional, List, Tuple
+from sqlalchemy import and_, or_
 
 class ZohoMockService:
     """Servicio que simula el comportamiento de Zoho CRM API"""
@@ -178,6 +181,7 @@ class ZohoMockService:
             account_name_id=deal_data.get("Account_Name", {}).get("id") if isinstance(deal_data.get("Account_Name"), dict) else None,
             owner_id=deal_data.get("Owner", {}).get("id") if isinstance(deal_data.get("Owner"), dict) else None,
             commercial_origin=deal_data.get("Origen_Comercial", ""),
+            ec_id=deal_data.get("EC_ID", ""),
             pipeline=deal_data.get("Pipeline", ""),
             deal_data=deal_data,
         )
@@ -250,11 +254,13 @@ class ZohoMockService:
         
         # Buscar lead existente por email, teléfono o EC_ID
         existing_lead = None
-        if email:
-            existing_lead = db.query(ZohoLead).filter(ZohoLead.email == email).first()
-        if not existing_lead and mobile:
-            existing_lead = db.query(ZohoLead).filter(ZohoLead.mobile == mobile).first()
-        if not existing_lead and ec_id:
+        # if email:
+        #     existing_lead = db.query(ZohoLead).filter(ZohoLead.email == email).first()
+        # if not existing_lead and mobile:
+        #     existing_lead = db.query(ZohoLead).filter(ZohoLead.mobile == mobile).first()
+        # if not existing_lead and ec_id:
+        #     existing_lead = db.query(ZohoLead).filter(ZohoLead.ec_id == ec_id).first()
+        if ec_id:
             existing_lead = db.query(ZohoLead).filter(ZohoLead.ec_id == ec_id).first()
         
         is_new = existing_lead is None
@@ -405,3 +411,136 @@ class ZohoMockService:
     def get_lead_by_email(db: Session, email: str) -> Optional[ZohoLead]:
         """Obtiene un lead por email"""
         return db.query(ZohoLead).filter(ZohoLead.email == email).first()
+    
+
+
+    @staticmethod
+    def parse_search_criteria(criteria: Optional[str]) -> Dict[str, Any]:
+        """
+        Parsea el criterio de búsqueda de Zoho CRM
+        Ejemplo: (EC_ID:equals:TRVD-F31E4D177F1)
+        Ejemplo: (EC_ID:equals:FL-49E91ADFF6DC)and(Pasaporte:equals:N08799193)
+        """
+        filters = {}
+        
+        if not criteria:
+            return filters
+        
+        # Patrón para extraer campos y valores
+        # Formato: (Campo:operador:valor)
+        pattern = r'\(([A-Za-z_]+):(equals|contains|starts_with|ends_with):([^)]+)\)'
+        matches = re.findall(pattern, criteria)
+        
+        for field, operator, value in matches:
+            filters[field] = {
+                'operator': operator,
+                'value': value
+            }
+        
+        return filters
+
+    @staticmethod
+    def search_deals(
+        db: Session,
+        filters: Dict[str, Any],
+        page: int = 1,
+        per_page: int = 200,
+        sort_by: str = "id",
+        sort_order: str = "desc"
+    ) -> Tuple[List[ZohoDeal], int]:
+        """
+        Busca deals en la base de datos según los criterios
+        Returns: (lista_deals, total_count)
+        """
+        query = db.query(ZohoDeal)
+        
+        # Aplicar filtros
+        conditions = []
+        
+        for field, filter_info in filters.items():
+            operator = filter_info['operator']
+            value = filter_info['value']
+            
+            # Mapear campos de Zoho a campos del modelo
+            field_mapping = {
+                'EC_ID': 'ec_id',
+                'Deal_Name': 'deal_name',
+                'Stage': 'stage',
+                'Amount': 'amount',
+                'Contact_Name': 'contact_id',
+                'Origen_Comercial': 'commercial_origin',
+                'Pasaporte': None,  # Campo personalizado en deal_data JSON
+                'Email': None,  # Necesita join con Contact
+            }
+            
+            model_field = field_mapping.get(field)
+            
+            if model_field and hasattr(ZohoDeal, model_field):
+                if operator == 'equals':
+                    conditions.append(getattr(ZohoDeal, model_field) == value)
+                elif operator == 'contains':
+                    conditions.append(getattr(ZohoDeal, model_field).contains(value))
+                elif operator == 'starts_with':
+                    conditions.append(getattr(ZohoDeal, model_field).startswith(value))
+                elif operator == 'ends_with':
+                    conditions.append(getattr(ZohoDeal, model_field).endswith(value))
+            else:
+                # Buscar en deal_data (JSON) para campos personalizados
+                # Nota: SQLite tiene soporte limitado para JSON, esto es una aproximación
+                all_deals = query.all()
+                filtered_deals = []
+                for deal in all_deals:
+                    deal_json = deal.deal_data or {}
+                    if field in deal_json:
+                        deal_value = str(deal_json[field])
+                        if operator == 'equals' and deal_value == value:
+                            filtered_deals.append(deal)
+                        elif operator == 'contains' and value in deal_value:
+                            filtered_deals.append(deal)
+                        elif operator == 'starts_with' and deal_value.startswith(value):
+                            filtered_deals.append(deal)
+                        elif operator == 'ends_with' and deal_value.endswith(value):
+                            filtered_deals.append(deal)
+                
+                if conditions:
+                    query = query.filter(and_(*conditions))
+                    base_deals = query.all()
+                    deals = [d for d in base_deals if d in filtered_deals] if filtered_deals else base_deals
+                else:
+                    deals = filtered_deals
+                
+                total_count = len(deals)
+                offset = (page - 1) * per_page
+                deals = deals[offset:offset + per_page]
+                
+                # Ordenar
+                if sort_order == 'desc':
+                    deals.sort(key=lambda x: getattr(x, 'updated_at', x.created_at), reverse=True)
+                else:
+                    deals.sort(key=lambda x: getattr(x, 'updated_at', x.created_at))
+                
+                return deals, total_count
+        
+        if conditions:
+            query = query.filter(and_(*conditions))
+        
+        # Contar total
+        total_count = query.count()
+        
+        # Paginación
+        offset = (page - 1) * per_page
+        deals = query.offset(offset).limit(per_page).all()
+        
+        # Ordenar
+        if hasattr(ZohoDeal, sort_by):
+            if sort_order == 'desc':
+                deals = sorted(deals, key=lambda x: getattr(x, sort_by, x.created_at) or '', reverse=True)
+            else:
+                deals = sorted(deals, key=lambda x: getattr(x, sort_by, x.created_at) or '')
+        else:
+            if sort_order == 'desc':
+                deals.sort(key=lambda x: x.updated_at, reverse=True)
+            else:
+                deals.sort(key=lambda x: x.updated_at)
+        
+        return deals, total_count

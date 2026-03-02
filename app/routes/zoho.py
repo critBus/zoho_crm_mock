@@ -2,7 +2,7 @@ import time
 import json
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import ApiLog
@@ -649,4 +649,123 @@ async def update_lead(request: Request, db: Session = Depends(get_db)):
             success=False,
             error_message=str(e)
         )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# Agregar después de update_deal en app/routes/zoho.py
+
+@router.get("/Deals/search")
+async def search_deals(
+    request: Request,
+    db: Session = Depends(get_db),
+    criteria: Optional[str] = Query(None),
+    per_page: int = Query(200, ge=1, le=200),
+    page: int = Query(1, ge=1),
+    sort_by: str = Query("id", regex="^[a-zA-Z_]+$"),
+    sort_order: str = Query("desc", regex="^(asc|desc)$")
+):
+    """
+    Busca deals en Zoho CRM usando criterios
+    Formato de respuesta igual al Zoho real
+    Ejemplo: /Deals/search?criteria=(EC_ID:equals:TRVD-F31E4D177F1)
+    """
+    start_time = time.time()
+    
+    try:
+        response_time_ms = int((time.time() - start_time) * 1000)
+        # Parsear criterios de búsqueda
+        deals = []
+        search_filters = ZohoMockService.parse_search_criteria(criteria)
+        
+        # Ejecutar búsqueda
+        deals, total_count = ZohoMockService.search_deals(db, search_filters, page, per_page, sort_by, sort_order)
+        
+        if not deals or len(deals) == 0:
+            response_body = {}
+            
+            await log_api_call(
+                db=db,
+                request=request,
+                endpoint="/Deals/search",
+                method="GET",
+                response_status=204,
+                response_body=response_body,
+                response_time_ms=response_time_ms,
+                success=True
+            )
+            
+            return Response(status_code=204)
+        
+        # Construir respuesta EXACTAMENTE como Zoho real (ver logs searcs.txt)
+        response_body = {
+            "data": [
+                {
+                    **deal.deal_data,  # Todos los campos del deal
+                    "id": deal.zoho_id,
+                    "Created_Time": deal.created_at.strftime("%Y-%m-%dT%H:%M:%S+02:00"),
+                    "Modified_Time": deal.updated_at.strftime("%Y-%m-%dT%H:%M:%S+02:00"),
+                    "Created_By": {
+                        "name": "Falso Falso Falso",
+                        "id": "45287800000XX0XX00X",
+                        "email": "test@test.test"
+                    },
+                    "Modified_By": {
+                        "name": "PRODUCTO ETG",
+                        "id": "452XXX0000000XXX00X",
+                        "email": "test@test.test"
+                    },
+                    "Owner": {
+                        "name": "Falso Falso",
+                        "id": "4528780000XXXXXX00X",
+                        "email": "test@test.test"
+                    }
+                }
+                for deal in deals
+            ],
+            "info": {
+                "per_page": per_page,
+                "count": len(deals),
+                "page": page,
+                "sort_by": sort_by,
+                "sort_order": sort_order,
+                "more_records": (page * per_page) < total_count
+            }
+        }
+        
+        
+        
+        # Log de la llamada API
+        await log_api_call(
+            db=db,
+            request=request,
+            endpoint="/Deals/search",
+            method="GET",
+            response_status=200,
+            response_body=response_body,
+            response_time_ms=response_time_ms,
+            zoho_deal_id=deals[0].zoho_id if deals else None
+        )
+        
+        return response_body
+        
+    except Exception as e:
+        response_time_ms = int((time.time() - start_time) * 1000)
+        error_response = {
+            "code": "ERROR",
+            "status": "error",
+            "message": str(e)
+        }
+        
+        await log_api_call(
+            db=db,
+            request=request,
+            endpoint="/Deals/search",
+            method="GET",
+            response_status=500,
+            response_body=error_response,
+            response_time_ms=response_time_ms,
+            success=False,
+            error_message=str(e)
+        )
+        
         raise HTTPException(status_code=500, detail=str(e))
