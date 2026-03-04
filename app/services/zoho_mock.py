@@ -242,28 +242,23 @@ class ZohoMockService:
     # Agregar después de get_deal_by_id
 
     @staticmethod
-    def create_lead(db: Session, lead_data: Dict[str, Any]) -> Tuple[ZohoLead, bool, str, str]:
+    def create_lead(db: Session, lead_data: Dict[str, Any]) -> Tuple[ZohoLead, bool, str, str, Optional[ZohoDeal]]:
         """
-        Crea o actualiza un lead
-        Returns: (lead, is_new, response_code, message)
+        Crea o actualiza un lead y automáticamente crea un Deal relacionado
+        Returns: (lead, is_new, response_code, message, deal)
         """
         email = lead_data.get("Email", "")
         phone = lead_data.get("Phone", "")
         mobile = lead_data.get("Mobile", "")
         ec_id = lead_data.get("EC_ID", "")
         
-        # Buscar lead existente por email, teléfono o EC_ID
+        # Buscar lead existente por EC_ID
         existing_lead = None
-        # if email:
-        #     existing_lead = db.query(ZohoLead).filter(ZohoLead.email == email).first()
-        # if not existing_lead and mobile:
-        #     existing_lead = db.query(ZohoLead).filter(ZohoLead.mobile == mobile).first()
-        # if not existing_lead and ec_id:
-        #     existing_lead = db.query(ZohoLead).filter(ZohoLead.ec_id == ec_id).first()
         if ec_id:
             existing_lead = db.query(ZohoLead).filter(ZohoLead.ec_id == ec_id).first()
         
         is_new = existing_lead is None
+        created_deal = None
         
         if is_new:
             zoho_id = ZohoMockService.generate_zoho_id("LEAD")
@@ -279,7 +274,6 @@ class ZohoMockService:
                 city=lead_data.get("OCPI_City", "") or lead_data.get("City", ""),
                 address=lead_data.get("Direccion", "") or lead_data.get("Address", ""),
                 postal_code=lead_data.get("OCPI_Zip_Code", "") or lead_data.get("Zip_Code", ""),
-                
                 # Campos específicos de Leads
                 ec_id=ec_id,
                 company=lead_data.get("Company", ""),
@@ -288,8 +282,7 @@ class ZohoMockService:
                 lead_source=lead_data.get("Lead_Source", ""),
                 lead_status=lead_data.get("Lead_Status", "New"),
                 rating=lead_data.get("Rating", ""),
-                
-                # Campos personalizados de tus logs
+                # Campos personalizados
                 plataforma=lead_data.get("Plataforma", ""),
                 tipo_cliente=lead_data.get("tipo_cliente", ""),
                 origen_comercial=lead_data.get("Origen_Comercial", ""),
@@ -301,14 +294,18 @@ class ZohoMockService:
                 importe=str(lead_data.get("Importe", "")),
                 estado_expediente=lead_data.get("Estado_Expediente", ""),
                 estado_de_la_reserva=lead_data.get("Estado_de_la_Reserva", ""),
-                
                 lead_data=lead_data,
                 owner_id=lead_data.get("Owner", {}).get("id") if isinstance(lead_data.get("Owner"), dict) else None,
                 commercial_origin=lead_data.get("Origen_Comercial", ""),
             )
             db.add(lead)
+            db.flush()  # Para obtener el ID antes de commit
             response_code = "SUCCESS"
             message = "record added"
+            
+            # CREAR DEAL AUTOMÁTICAMENTE (nuevo comportamiento)
+            created_deal = ZohoMockService._create_deal_from_lead(db, lead, lead_data)
+            
         else:
             lead = existing_lead
             # Actualizar campos
@@ -321,7 +318,6 @@ class ZohoMockService:
             lead.city = lead_data.get("OCPI_City", lead.city)
             lead.address = lead_data.get("Direccion", lead.address)
             lead.postal_code = lead_data.get("OCPI_Zip_Code", lead.postal_code)
-            
             # Actualizar campos personalizados
             lead.plataforma = lead_data.get("Plataforma", lead.plataforma)
             lead.tipo_cliente = lead_data.get("tipo_cliente", lead.tipo_cliente)
@@ -332,17 +328,104 @@ class ZohoMockService:
             lead.vendedor = lead_data.get("Vendedor", lead.vendedor)
             lead.estado_expediente = lead_data.get("Estado_Expediente", lead.estado_expediente)
             lead.estado_de_la_reserva = lead_data.get("Estado_de_la_Reserva", lead.estado_de_la_reserva)
-            
             # Actualizar lead_data completo
             lead.lead_data = {**lead.lead_data, **lead_data}
             lead.updated_at = datetime.utcnow()
-            
             response_code = "DUPLICATE_DATA"
             message = "duplicate data"
         
         db.commit()
         db.refresh(lead)
-        return lead, is_new, response_code, message
+        if created_deal:
+            db.refresh(created_deal)
+        return lead, is_new, response_code, message, created_deal
+
+    @staticmethod
+    def _create_deal_from_lead(db: Session, lead: ZohoLead, lead_data: Dict[str, Any]) -> ZohoDeal:
+        """
+        Crea un Deal automáticamente cuando se crea un Lead
+        Basado en el comportamiento real de Zoho CRM
+        """
+        # Generar ID único para el Deal
+        deal_zoho_id = ZohoMockService.generate_zoho_id("DEAL")
+        
+        # Generar nombre del Deal automático (similar al real: T-TES_118264)
+        numeracion = ''.join(random.choices(string.digits, k=6))
+        deal_name = f"T-TES_{numeracion}"
+        
+        # Crear el Deal con los datos del Lead
+        deal = ZohoDeal(
+            zoho_id=deal_zoho_id,
+            ec_id=lead.ec_id,  # Mismo EC_ID que el Lead
+            deal_name=deal_name,
+            amount=lead_data.get("Amount", "0"),
+            stage=lead_data.get("Stage", "Nueva solicitud"),
+            contact_id=lead.zoho_id,  # Relacionar con el Lead
+            account_name_id=lead_data.get("Account_Name", {}).get("id") if isinstance(lead_data.get("Account_Name"), dict) else None,
+            owner_id=lead.owner_id,
+            commercial_origin=lead.origen_comercial,
+            pipeline=lead_data.get("Pipeline", ""),
+            # Guardar todos los campos en deal_data para búsqueda
+            deal_data={
+                **lead_data,
+                "EC_ID": lead.ec_id,
+                "Deal_Name": deal_name,
+                "Stage": "Nueva solicitud",
+                "Probability": 100,
+                "Currency": "EUR",
+                "Moneda": "EUROS",
+                "Moneda_de_la_venta": "Sin escoger",
+                "Exchange_Rate": 1,
+                "Cost_per_Click": 0,
+                "Cost_per_Conversion": 0,
+                "Media_de_correos": 0,
+                "Perdidos": 0,
+                "Cantidad_de_días_en_cerrar": 0,
+                "MC_Estimado": 0,
+                "Prueba": 1,
+                "Numeración_automática": numeracion,
+                "Margen_de_Utilidad_1": 100,
+                "Recomendaciones_de_vuelos": False,
+                "Quiero_personalizar_mi_viaje": False,
+                "Me_interesa_alquilar_un_coche": False,
+                "Acepto_la_Política_de_Privacidad": True,
+                "Enviar_Voucher": False,
+                "Pertenece_a_Otas": False,
+                "Pertenece_al_riesgo": "Sin seleccionar",
+                "Locked__s": False,
+                "Receptivo_Europa": False,
+                "Con_quien_viaja": "Solo",
+                "Acepta_recibir_informaciones_comerciales": False,
+                "Predicción_de_venta_Prediction": "2026-05-10",
+                # Campos de auditoría
+                "Created_By": {
+                    "name": "El que lo creo",
+                    "id": ZohoMockService.DEFAULT_OWNER_ID,
+                    "email": "elcorreo@example.com"
+                },
+                "Modified_By": {
+                    "name": "PRODUCTO ETG",
+                    "id": "452XXX0000000XXX00X",
+                    "email": "test@test.test"
+                },
+                "Owner": {
+                    "name": ZohoMockService.DEFAULT_OWNER_NAME,
+                    "id": ZohoMockService.DEFAULT_OWNER_ID,
+                    "email": "test@test.test"
+                },
+                "Contact_Name": {
+                    "name": f"{lead.first_name} {lead.last_name}",
+                    "id": lead.zoho_id
+                },
+                "Created_Time": lead.created_at.strftime("%Y-%m-%dT%H:%M:%S+01:00"),
+                "Modified_Time": lead.updated_at.strftime("%Y-%m-%dT%H:%M:%S+01:00"),
+                "Last_Activity_Time": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S+01:00"),
+                "id": deal_zoho_id,
+            }
+        )
+        
+        db.add(deal)
+        return deal
 
     @staticmethod
     def update_lead(db: Session, zoho_id: str, lead_data: Dict[str, Any]) -> Tuple[Optional[ZohoLead], str, str]:
@@ -439,6 +522,7 @@ class ZohoMockService:
         
         return filters
 
+    # En el método search_deals de ZohoMockService, actualizar para buscar en deal_data
     @staticmethod
     def search_deals(
         db: Session,
@@ -452,95 +536,55 @@ class ZohoMockService:
         Busca deals en la base de datos según los criterios
         Returns: (lista_deals, total_count)
         """
-        query = db.query(ZohoDeal)
+        # Obtener todos los deals y filtrar manualmente para soporte JSON
+        all_deals = db.query(ZohoDeal).all()
+        filtered_deals = []
         
-        # Aplicar filtros
-        conditions = []
-        
-        for field, filter_info in filters.items():
-            operator = filter_info['operator']
-            value = filter_info['value']
+        for deal in all_deals:
+            match = True
+            deal_json = deal.deal_data or {}
             
-            # Mapear campos de Zoho a campos del modelo
-            field_mapping = {
-                'EC_ID': 'ec_id',
-                'Deal_Name': 'deal_name',
-                'Stage': 'stage',
-                'Amount': 'amount',
-                'Contact_Name': 'contact_id',
-                'Origen_Comercial': 'commercial_origin',
-                'Pasaporte': None,  # Campo personalizado en deal_data JSON
-                'Email': None,  # Necesita join con Contact
-            }
-            
-            model_field = field_mapping.get(field)
-            
-            if model_field and hasattr(ZohoDeal, model_field):
-                if operator == 'equals':
-                    conditions.append(getattr(ZohoDeal, model_field) == value)
-                elif operator == 'contains':
-                    conditions.append(getattr(ZohoDeal, model_field).contains(value))
-                elif operator == 'starts_with':
-                    conditions.append(getattr(ZohoDeal, model_field).startswith(value))
-                elif operator == 'ends_with':
-                    conditions.append(getattr(ZohoDeal, model_field).endswith(value))
-            else:
-                # Buscar en deal_data (JSON) para campos personalizados
-                # Nota: SQLite tiene soporte limitado para JSON, esto es una aproximación
-                all_deals = query.all()
-                filtered_deals = []
-                for deal in all_deals:
-                    deal_json = deal.deal_data or {}
-                    if field in deal_json:
-                        deal_value = str(deal_json[field])
-                        if operator == 'equals' and deal_value == value:
-                            filtered_deals.append(deal)
-                        elif operator == 'contains' and value in deal_value:
-                            filtered_deals.append(deal)
-                        elif operator == 'starts_with' and deal_value.startswith(value):
-                            filtered_deals.append(deal)
-                        elif operator == 'ends_with' and deal_value.endswith(value):
-                            filtered_deals.append(deal)
+            for field, filter_info in filters.items():
+                operator = filter_info['operator']
+                value = filter_info['value']
                 
-                if conditions:
-                    query = query.filter(and_(*conditions))
-                    base_deals = query.all()
-                    deals = [d for d in base_deals if d in filtered_deals] if filtered_deals else base_deals
+                # Buscar en campos directos del modelo
+                if hasattr(deal, field.lower()):
+                    model_value = getattr(deal, field.lower(), None)
+                    if operator == 'equals' and str(model_value) != str(value):
+                        match = False
+                        break
+                    elif operator == 'contains' and value not in str(model_value):
+                        match = False
+                        break
+                
+                # Buscar en deal_data (JSON) para campos personalizados como EC_ID
+                elif field in deal_json:
+                    deal_value = str(deal_json[field])
+                    if operator == 'equals' and deal_value != value:
+                        match = False
+                        break
+                    elif operator == 'contains' and value not in deal_value:
+                        match = False
+                        break
                 else:
-                    deals = filtered_deals
-                
-                total_count = len(deals)
-                offset = (page - 1) * per_page
-                deals = deals[offset:offset + per_page]
-                
-                # Ordenar
-                if sort_order == 'desc':
-                    deals.sort(key=lambda x: getattr(x, 'updated_at', x.created_at), reverse=True)
-                else:
-                    deals.sort(key=lambda x: getattr(x, 'updated_at', x.created_at))
-                
-                return deals, total_count
+                    # Campo no encontrado
+                    match = False
+                    break
+            
+            if match:
+                filtered_deals.append(deal)
         
-        if conditions:
-            query = query.filter(and_(*conditions))
+        total_count = len(filtered_deals)
         
-        # Contar total
-        total_count = query.count()
+        # Ordenar
+        if sort_order == 'desc':
+            filtered_deals.sort(key=lambda x: x.updated_at or x.created_at, reverse=True)
+        else:
+            filtered_deals.sort(key=lambda x: x.updated_at or x.created_at)
         
         # Paginación
         offset = (page - 1) * per_page
-        deals = query.offset(offset).limit(per_page).all()
-        
-        # Ordenar
-        if hasattr(ZohoDeal, sort_by):
-            if sort_order == 'desc':
-                deals = sorted(deals, key=lambda x: getattr(x, sort_by, x.created_at) or '', reverse=True)
-            else:
-                deals = sorted(deals, key=lambda x: getattr(x, sort_by, x.created_at) or '')
-        else:
-            if sort_order == 'desc':
-                deals.sort(key=lambda x: x.updated_at, reverse=True)
-            else:
-                deals.sort(key=lambda x: x.updated_at)
+        deals = filtered_deals[offset:offset + per_page]
         
         return deals, total_count

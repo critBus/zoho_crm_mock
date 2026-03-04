@@ -488,7 +488,7 @@ async def update_deal(request: Request, db: Session = Depends(get_db)):
 @router.post("/Leads")
 async def create_lead(request: Request, db: Session = Depends(get_db)):
     """
-    Crea un lead en Zoho CRM
+    Crea un lead en Zoho CRM y automáticamente un Deal relacionado
     Formato de respuesta igual al Zoho real (basado en logs.txt)
     """
     start_time = time.time()
@@ -498,11 +498,12 @@ async def create_lead(request: Request, db: Session = Depends(get_db)):
         triggers = body.get("trigger", [])
         
         results = []
+        created_deals = []
         
         for lead_data in lead_data_list:
-            lead, is_new, code, message = ZohoMockService.create_lead(db, lead_data)
+            lead, is_new, code, message, deal = ZohoMockService.create_lead(db, lead_data)
             
-            # Construir respuesta EXACTAMENTE como Zoho real (ver logs.txt)
+            # Construir respuesta EXACTAMENTE como Zoho real
             result = {
                 "code": code,
                 "status": "success" if code == "SUCCESS" else "error",
@@ -515,13 +516,15 @@ async def create_lead(request: Request, db: Session = Depends(get_db)):
                 "message": message
             }
             results.append(result)
+            
+            if deal:
+                created_deals.append(deal)
         
         response_body = {
             "data": results
         }
         
         response_time_ms = int((time.time() - start_time) * 1000)
-        
         await log_api_call(
             db=db,
             request=request,
@@ -533,7 +536,6 @@ async def create_lead(request: Request, db: Session = Depends(get_db)):
             response_time_ms=response_time_ms,
             zoho_lead_id=results[0]["details"]["id"] if results else None
         )
-        
         return response_body
         
     except Exception as e:
@@ -637,58 +639,37 @@ async def search_deals(
     """
     Busca deals en Zoho CRM usando criterios
     Formato de respuesta igual al Zoho real
-    Ejemplo: /Deals/search?criteria=(EC_ID:equals:TRVD-F31E4D177F1)
+    Ejemplo: /Deals/search?criteria=(EC_ID:equals:FL-TEST00000001)
     """
     start_time = time.time()
-    
     try:
-        response_time_ms = int((time.time() - start_time) * 1000)
         # Parsear criterios de búsqueda
-        deals = []
         search_filters = ZohoMockService.parse_search_criteria(criteria)
         
         # Ejecutar búsqueda
-        deals, total_count = ZohoMockService.search_deals(db, search_filters, page, per_page, sort_by, sort_order)
+        deals, total_count = ZohoMockService.search_deals(
+            db, search_filters, page, per_page, sort_by, sort_order
+        )
         
         if not deals or len(deals) == 0:
-            response_body = {}
-            
+            response_time_ms = int((time.time() - start_time) * 1000)
             await log_api_call(
                 db=db,
                 request=request,
                 endpoint="/Deals/search",
                 method="GET",
                 response_status=204,
-                response_body=response_body,
+                response_body={},
                 response_time_ms=response_time_ms,
                 success=True
             )
-            
             return Response(status_code=204)
         
-        # Construir respuesta EXACTAMENTE como Zoho real (ver logs searcs.txt)
+        # Construir respuesta EXACTAMENTE como Zoho real
         response_body = {
             "data": [
                 {
                     **deal.deal_data,  # Todos los campos del deal
-                    "id": deal.zoho_id,
-                    "Created_Time": deal.created_at.strftime("%Y-%m-%dT%H:%M:%S+02:00"),
-                    "Modified_Time": deal.updated_at.strftime("%Y-%m-%dT%H:%M:%S+02:00"),
-                    "Created_By": {
-                        "name": "Falso Falso Falso",
-                        "id": "45287800000XX0XX00X",
-                        "email": "test@test.test"
-                    },
-                    "Modified_By": {
-                        "name": "PRODUCTO ETG",
-                        "id": "452XXX0000000XXX00X",
-                        "email": "test@test.test"
-                    },
-                    "Owner": {
-                        "name": "Falso Falso",
-                        "id": "4528780000XXXXXX00X",
-                        "email": "test@test.test"
-                    }
                 }
                 for deal in deals
             ],
@@ -702,9 +683,7 @@ async def search_deals(
             }
         }
         
-        
-        
-        # Log de la llamada API
+        response_time_ms = int((time.time() - start_time) * 1000)
         await log_api_call(
             db=db,
             request=request,
@@ -715,7 +694,6 @@ async def search_deals(
             response_time_ms=response_time_ms,
             zoho_deal_id=deals[0].zoho_id if deals else None
         )
-        
         return response_body
         
     except Exception as e:
@@ -725,7 +703,6 @@ async def search_deals(
             "status": "error",
             "message": str(e)
         }
-        
         await log_api_call(
             db=db,
             request=request,
@@ -737,5 +714,4 @@ async def search_deals(
             success=False,
             error_message=str(e)
         )
-        
         raise HTTPException(status_code=500, detail=str(e))
