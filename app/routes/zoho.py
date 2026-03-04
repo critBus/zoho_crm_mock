@@ -569,47 +569,17 @@ async def update_lead(request: Request, db: Session = Depends(get_db)):
     start_time = time.time()
     try:
         body = await request.json()
-        lead_data_list = body.get("data", [])
-        triggers = body.get("trigger", [])
         
-        results = []
-        
-        for lead_data in lead_data_list:
-            zoho_id = lead_data.get("id")
-            
-            if not zoho_id:
-                results.append({
-                    "code": "REQUIRED_FIELD_MISSING",
-                    "status": "error",
-                    "message": "Lead ID is required"
-                })
-                continue
-            
-            lead, code, message = ZohoMockService.update_lead(db, zoho_id, lead_data)
-            
-            if not lead:
-                results.append({
-                    "code": code,
-                    "status": "error",
-                    "message": message
-                })
-            else:
-                results.append({
-                    "code": code,
-                    "status": "success",
-                    "details": ZohoMockService._build_details_response(
-                        zoho_id=lead.zoho_id,
-                        created_at=lead.created_at,
-                        modified_at=lead.updated_at,
-                        include_creator=True
-                    ),
-                    "message": message
-                })
-        
-        response_body = {
-            "data": results
-        }
-        
+        response_body= {
+            "data": [
+                {
+                    "code": "INVALID_DATA",
+                    "details": {},
+                    "message": "the id given seems to be invalid",
+                    "status": "error"
+                }
+            ]
+        }            
         response_time_ms = int((time.time() - start_time) * 1000)
         
         await log_api_call(
@@ -618,7 +588,7 @@ async def update_lead(request: Request, db: Session = Depends(get_db)):
             endpoint="/Leads",
             method="PUT",
             body=body,
-            response_status=200,
+            response_status=202,
             response_body=response_body,
             response_time_ms=response_time_ms
         )
