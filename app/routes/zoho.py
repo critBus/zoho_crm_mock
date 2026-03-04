@@ -480,7 +480,93 @@ async def update_deal(request: Request, db: Session = Depends(get_db)):
         )
         raise HTTPException(status_code=500, detail=str(e))
 
-
+@router.put("/Deals/{deal_id}")
+async def update_deal_by_id(request: Request,deal_id: str, db: Session = Depends(get_db)):
+    """
+    Actualiza un deal en Zoho CRM
+    Formato de respuesta igual al Zoho real
+    """
+    start_time = time.time()
+    
+    try:
+        body = await request.json()
+        deal_data_list = body.get("data", [])
+        
+        results = []
+        for deal_data in deal_data_list:
+            zoho_id = deal_id
+            
+            if not zoho_id:
+                results.append({
+                    "code": "REQUIRED_FIELD_MISSING",
+                    "status": "error",
+                    "message": "Deal ID is required"
+                })
+                continue
+            
+            deal, code, message = ZohoMockService.update_deal(db, zoho_id, deal_data)
+            
+            if not deal:
+                results.append({
+                    "code": code,
+                    "status": "error",
+                    "message": message
+                })
+            else:
+                results.append({
+                    "code": code,
+                    "status": "success",
+                    "details": ZohoMockService._build_details_response(
+                        zoho_id=deal.zoho_id,
+                        created_at=deal.created_at,
+                        modified_at=deal.updated_at,
+                        include_creator=True
+                    ),
+                    "message": message
+                })
+        
+        response_body = {
+            "data": results
+        }
+        
+        response_time_ms = int((time.time() - start_time) * 1000)
+        
+        await log_api_call(
+            db=db,
+            request=request,
+            endpoint=f"/Deals/{deal_id}",
+            method="PUT",
+            body=body,
+            response_status=200,
+            response_body=response_body,
+            response_time_ms=response_time_ms
+        )
+        
+        return response_body
+    
+    except Exception as e:
+        response_time_ms = int((time.time() - start_time) * 1000)
+        error_response = {
+            "data": [
+                {
+                    "code": "ERROR",
+                    "status": "error",
+                    "message": str(e)
+                }
+            ]
+        }
+        await log_api_call(
+            db=db,
+            request=request,
+            endpoint=f"/Deals/{deal_id}",
+            method="PUT",
+            response_status=500,
+            response_body=error_response,
+            response_time_ms=response_time_ms,
+            success=False,
+            error_message=str(e)
+        )
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Agregar después de update_deal
