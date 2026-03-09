@@ -501,11 +501,15 @@ class ZohoMockService:
     def parse_search_criteria(criteria: Optional[str]) -> Dict[str, Any]:
         """
         Parsea el criterio de búsqueda de Zoho CRM
-        Ejemplo: (EC_ID:equals:TRVD-F31E4D177F1)
-        Ejemplo: (EC_ID:equals:FL-49E91ADFF6DC)and(Pasaporte:equals:N08799193)
+        Soporta operadores: equals, contains, starts_with, ends_with
+        Soporta lógica OR cuando hay múltiples condiciones
+        Ejemplos:
+        - (Email:equals:correo@ejemplo.com)
+        - (Phone:equals:52007922)
+        - ((Email:equals:correo@ejemplo.com)or(Phone:equals:52007922))
+        - (EC_ID:equals:TRVD-F31E4D177F1)and(Pasaporte:equals:N08799193)
         """
-        filters = {}
-        
+        filters = []
         if not criteria:
             return filters
         
@@ -514,13 +518,243 @@ class ZohoMockService:
         pattern = r'\(([A-Za-z_]+):(equals|contains|starts_with|ends_with):([^)]+)\)'
         matches = re.findall(pattern, criteria)
         
+        # Detectar si es OR o AND
+        is_or_logic = 'or' in criteria.lower()
+        
         for field, operator, value in matches:
-            filters[field] = {
+            filters.append({
+                'field': field,
                 'operator': operator,
-                'value': value
-            }
+                'value': value,
+                'logic': 'or' if is_or_logic else 'and'
+            })
         
         return filters
+
+    @staticmethod
+    def search_contacts(
+        db: Session,
+        filters: List[Dict[str, Any]],
+        page: int = 1,
+        per_page: int = 200,
+        sort_by: str = "id",
+        sort_order: str = "desc"
+    ) -> Tuple[List[ZohoContact], int]:
+        """
+        Busca contactos en la base de datos según los criterios
+        Soporta búsqueda por Email, Phone con operador OR
+        Returns: (lista_contactos, total_count)
+        """
+        # Obtener todos los contactos y filtrar manualmente
+        all_contacts = db.query(ZohoContact).all()
+        filtered_contacts = []
+        
+        # Mapeo de campos de Zoho a modelo
+        field_mapping = {
+            'Email': 'email',
+            'Phone': 'phone',
+            'Mobile': 'mobile',
+            'First_Name': 'first_name',
+            'Last_Name': 'last_name',
+            'Ciudad': 'city',
+            'Direccion': 'address',
+            'Pa_s': 'country',
+            'Estado': 'state',
+            'Provincia': 'state',
+            'Municipio': 'municipality',
+            'Mailing_Zip': 'postal_code',
+            'Tienda': 'store',
+            'Date_of_Birth': 'birth_date',
+        }
+        
+        for contact in all_contacts:
+            if not filters:
+                filtered_contacts.append(contact)
+                continue
+            
+            # Evaluar cada condición
+            condition_results = []
+            
+            for filter_info in filters:
+                field = filter_info['field']
+                operator = filter_info['operator']
+                value = filter_info['value']
+                
+                model_field = field_mapping.get(field, field.lower())
+                
+                if hasattr(contact, model_field):
+                    contact_value = getattr(contact, model_field, None)
+                    
+                    # Limpieza para comparación de teléfonos
+                    if field in ['Phone', 'Mobile']:
+                        contact_value_clean = str(contact_value or '').replace('+', '').replace(' ', '').replace('-', '')
+                        value_clean = str(value).replace('+', '').replace(' ', '').replace('-', '')
+                        
+                        if operator == 'equals':
+                            condition_results.append(contact_value_clean == value_clean)
+                        elif operator == 'contains':
+                            condition_results.append(value_clean in contact_value_clean)
+                    else:
+                        if operator == 'equals':
+                            condition_results.append(str(contact_value or '').lower() == str(value).lower())
+                        elif operator == 'contains':
+                            condition_results.append(value.lower() in str(contact_value or '').lower())
+                        elif operator == 'starts_with':
+                            condition_results.append(str(contact_value or '').lower().startswith(value.lower()))
+                        elif operator == 'ends_with':
+                            condition_results.append(str(contact_value or '').lower().endswith(value.lower()))
+                else:
+                    condition_results.append(False)
+            
+            # Aplicar lógica OR o AND
+            if filters[0].get('logic') == 'or':
+                if any(condition_results):
+                    filtered_contacts.append(contact)
+            else:  # AND logic
+                if all(condition_results):
+                    filtered_contacts.append(contact)
+        
+        total_count = len(filtered_contacts)
+        
+        # Ordenar
+        if sort_order == 'desc':
+            filtered_contacts.sort(key=lambda x: x.updated_at or x.created_at, reverse=True)
+        else:
+            filtered_contacts.sort(key=lambda x: x.updated_at or x.created_at)
+        
+        # Paginación
+        offset = (page - 1) * per_page
+        contacts = filtered_contacts[offset:offset + per_page]
+        
+        return contacts, total_count
+
+    @staticmethod
+    def build_zoho_contact_response(contact: ZohoContact) -> Dict[str, Any]:
+        """
+        Construye la respuesta de contacto en formato exacto de Zoho CRM
+        Basado en los logs proporcionados
+        """
+        return {
+            "id": contact.zoho_id,
+            "Email": contact.email,
+            "First_Name": contact.first_name,
+            "Last_Name": contact.last_name,
+            "Full_Name": contact.full_name or f"{contact.first_name} {contact.last_name}".strip(),
+            "Phone": contact.phone,
+            "Mobile": contact.mobile or contact.phone,
+            "Pa_s": contact.country,
+            "Estado": contact.state,
+            "Provincia": contact.state,
+            "Ciudad": contact.city,
+            "Municipio": contact.municipality,
+            "Direcci_n": contact.address,
+            "Mailing_Zip": contact.postal_code,
+            "Date_of_Birth": contact.birth_date,
+            "Tienda": contact.store,
+            "Acepto_la_Pol_tica_de_Privacidad": contact.accept_policy,
+            "Acepto_t_rminos_y_condiciones": contact.accept_policy,
+            "Acepta_recibir_informaciones_comerciales": contact.accept_newsletter,
+            "Suscrito_para_recibir_informaci_n": contact.accept_newsletter,
+            "Estado_del_Contacto": contact.customer_contacted,
+            "Account_Name": {
+                "name": "Gran Azul",
+                "id": contact.account_zoho_id or "769234000000485463"
+            } if contact.account_zoho_id else None,
+            "Owner": {
+                "name": "Zoho Gran Azul",
+                "id": contact.owner_zoho_id or "769234000000427001",
+                "email": "zoho@granazul.com"
+            },
+            "Created_By": {
+                "name": "Zoho Gran Azul",
+                "id": contact.owner_zoho_id or "769234000000427001",
+                "email": "zoho@granazul.com"
+            },
+            "Modified_By": {
+                "name": "Zoho Gran Azul",
+                "id": contact.owner_zoho_id or "769234000000427001",
+                "email": "zoho@granazul.com"
+            },
+            "Created_Time": contact.created_at.strftime("%Y-%m-%dT%H:%M:%S-05:00") if contact.created_at else None,
+            "Modified_Time": contact.updated_at.strftime("%Y-%m-%dT%H:%M:%S-05:00") if contact.updated_at else None,
+            "Last_Activity_Time": contact.updated_at.strftime("%Y-%m-%dT%H:%M:%S-05:00") if contact.updated_at else None,
+            "Fuente_de_adquisici_n": contact.acquisition_source or "Directo",
+            "Origen_comercial_del_Contacto": contact.commercial_origin or "Venta Directa (Oficina)",
+            "Documento_de_Identificaci_n": contact.document_id,
+            "Tipo_de_Documento_de_Identificaci_n": contact.document_type,
+            "Oficina_que_se_le_asigna_el_Contacto": contact.office_assigned,
+            "Community_Manager": contact.community_manager,
+            # Campos adicionales de Zoho
+            "No_enviar_SMS": False,
+            "$currency_symbol": "USD",
+            "Visitor_Score": None,
+            "$field_states": None,
+            "Mensaje_del_Contacto": None,
+            "Formas_de_contactar_al_cliente": [],
+            "Pais_Oficina": None,
+            "$state": "save",
+            "Unsubscribed_Mode": None,
+            "$process_flow": False,
+            "Ediciones_masivas": False,
+            "Agregado_a_la_Base_de_Dato_del_CM": False,
+            "FUT_Campaing": None,
+            "Moto": None,
+            "$locked_for_me": False,
+            "$approved": True,
+            "Nivel": None,
+            "Nombre_del_Formulario": None,
+            "$approval": {
+                "delegate": False,
+                "takeover": False,
+                "approve": False,
+                "reject": False,
+                "resubmit": False
+            },
+            "First_Visited_URL": None,
+            "Days_Visited": None,
+            "Contacto_a_Borrar": False,
+            "$editable": True,
+            "Nota": None,
+            "Oferta_seleccionada": None,
+            "Last_Visited_Time": None,
+            "$zia_owner_assignment": "owner_recommendation_unavailable",
+            "$is_duplicate": False,
+            "Oficina_Original": None,
+            "Number_Of_Chats": None,
+            "Dato_extra_del_contacto_exportado": None,
+            "$review_process": {
+                "approve": False,
+                "reject": False,
+                "resubmit": False
+            },
+            "Tipo_de_Socio": None,
+            "Average_Time_Spent_Minutes": None,
+            "$layout_id": {
+                "display_label": "Standard",
+                "name": "Standard",
+                "id": "769234000000032039"
+            },
+            "Salutation": None,
+            "Record_Image": None,
+            "$review": None,
+            "Responsable": None,
+            "C_digo_Landing_Page": None,
+            "TTG_Campaing": None,
+            "URL_Origen": None,
+            "Puntos_disponibles": None,
+            "Territories": None,
+            "Contacto_exportado_desde": None,
+            "Acepto_t_rminos_y_condiciones": False,
+            "First_Visited_Time": None,
+            "$in_merge": False,
+            "Referrer": None,
+            "Puntos_usados_totales": None,
+            "Codigo_de_descuento": None,
+            "Locked__s": False,
+            "Tag": [],
+            "$approval_state": "approved",
+            "Primera_pagina_o_remitente": False,
+        }
 
     # En el método search_deals de ZohoMockService, actualizar para buscar en deal_data
     @staticmethod

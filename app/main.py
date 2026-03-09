@@ -34,9 +34,9 @@ async def root():
         "version": "1.0.0",
         "endpoints": {
             "token": "POST /token",
-            "contacts": "POST /Contacts, PUT /Contacts",
-            "deals": "POST /Deals, PUT /Deals",
-            "leads": "POST /Leads, PUT /Leads",  # Nuevo
+            "contacts": "POST /Contacts, PUT /Contacts, GET /Contacts/search, GET /Contacts/{id}",
+            "deals": "POST /Deals, PUT /Deals, GET /Deals/search",
+            "leads": "POST /Leads, PUT /Leads",
             "admin": "GET /admin/logs, /admin/contacts, /admin/deals, /admin/leads, /admin/stats"
         }
     }
