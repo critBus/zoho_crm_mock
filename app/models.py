@@ -7,6 +7,8 @@ class ZohoContact(Base):
     __tablename__ = "zoho_contacts"
     id = Column(Integer, primary_key=True, autoincrement=True)
     zoho_id = Column(String(50), unique=True, nullable=False, index=True)
+    account_name_id = Column(String(50))
+    owner_id = Column(String(50))
     
     # Campos básicos
     email = Column(String(255), index=True)
