@@ -11,6 +11,7 @@ from app.services.logger import ApiLogger
 from app.config import ZOHO_MOCK_CONFIG
 from app.models import ZohoLead
 from app.services.zoho_mock import ZohoMockService
+import traceback
 
 router = APIRouter()
 
@@ -783,6 +784,7 @@ async def search_deals(
         return response_body
         
     except Exception as e:
+        print(traceback.format_exc())
         response_time_ms = int((time.time() - start_time) * 1000)
         error_response = {
             "code": "ERROR",

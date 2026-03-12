@@ -511,6 +511,7 @@ class ZohoMockService:
         """
         filters = []
         if not criteria:
+            print(f"No habian filters: {criteria}")
             return filters
         
         # Patrón para extraer campos y valores
@@ -760,7 +761,7 @@ class ZohoMockService:
     @staticmethod
     def search_deals(
         db: Session,
-        filters: Dict[str, Any],
+        filters: List[Dict[str, Any]],
         page: int = 1,
         per_page: int = 200,
         sort_by: str = "id",
@@ -778,34 +779,51 @@ class ZohoMockService:
             match = True
             deal_json = deal.deal_data or {}
             
-            for field, filter_info in filters.items():
+            for filter_info in filters:
+                field=filter_info['field']
                 operator = filter_info['operator']
                 value = filter_info['value']
+                is_and_logic=filter_info['logic']=='and'
                 
                 # Buscar en campos directos del modelo
                 if hasattr(deal, field.lower()):
                     model_value = getattr(deal, field.lower(), None)
                     if operator == 'equals' and str(model_value) != str(value):
                         match = False
-                        break
+                        if is_and_logic:
+                            break
+                        else:
+                            continue
                     elif operator == 'contains' and value not in str(model_value):
                         match = False
-                        break
+                        if is_and_logic:
+                            break
+                        else:
+                            continue
                 
                 # Buscar en deal_data (JSON) para campos personalizados como EC_ID
                 elif field in deal_json:
                     deal_value = str(deal_json[field])
                     if operator == 'equals' and deal_value != value:
                         match = False
-                        break
+                        if is_and_logic:
+                            break
+                        else:
+                            continue
                     elif operator == 'contains' and value not in deal_value:
                         match = False
-                        break
+                        if is_and_logic:
+                            break
+                        else:
+                            continue
                 else:
                     # Campo no encontrado
                     match = False
-                    break
-            
+                    if is_and_logic:
+                        break
+                    else:
+                        continue
+        
             if match:
                 filtered_deals.append(deal)
         
