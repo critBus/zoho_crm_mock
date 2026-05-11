@@ -11,6 +11,9 @@ from app.services.logger import ApiLogger
 from app.config import ZOHO_MOCK_CONFIG
 from app.models import ZohoLead
 from app.services.zoho_mock import ZohoMockService
+import traceback
+from app.services.error_simulation import ErrorSimulationService
+from requests.exceptions import ConnectTimeout, SSLError, Timeout, ConnectionError
 
 router = APIRouter()
 
@@ -83,11 +86,48 @@ async def log_api_call(
     
     return request_id
 
+async def check_and_raise_simulated_error(
+    db: Session,
+    request: Request,
+    endpoint: str
+):
+    """Verifica si debe levantar un error simulado"""
+    simulation = ErrorSimulationService.get_active_simulation(db, endpoint)
+    
+    if simulation and ErrorSimulationService.should_raise_error(simulation):
+        # Incrementar contador
+        ErrorSimulationService.increment_error_count(db, simulation)
+        
+        # Extraer URL de la petición
+        url = str(request.url)
+        
+        # Loguear el error simulado
+        start_time = time.time()
+        response_time_ms = int((time.time() - start_time) * 1000)
+        
+        await log_api_call(
+            db=db,
+            request=request,
+            endpoint=endpoint,
+            method=request.method,
+            response_status=500,
+            response_body={"error": f"Simulated {simulation.error_type}"},
+            response_time_ms=response_time_ms,
+            success=False,
+            error_message=f"Simulated {simulation.error_type} (count: {simulation.current_error_count}/{simulation.consecutive_errors})"
+        )
+        
+        # Levantar el error simulado
+        ErrorSimulationService.raise_simulated_error(simulation.error_type, url)
+    
+    return simulation
 
 @router.post("/token")
 async def login(request: Request, db: Session = Depends(get_db)):
     """Simula login de Zoho para obtener access token"""
     start_time = time.time()
+        # VERIFICAR ERROR SIMULADO
+    await check_and_raise_simulated_error(db, request, "/token")
     
     try:
         token = ZohoMockService.get_or_create_token(db)
@@ -135,6 +175,8 @@ async def create_contact(request: Request, db: Session = Depends(get_db)):
     Formato de respuesta igual al Zoho real
     """
     start_time = time.time()
+        # VERIFICAR ERROR SIMULADO
+    await check_and_raise_simulated_error(db, request, "/Contacts")
     
     try:
         body = await request.json()
@@ -207,6 +249,8 @@ async def update_contact(request: Request, db: Session = Depends(get_db)):
     Formato de respuesta igual al Zoho real
     """
     start_time = time.time()
+        # VERIFICAR ERROR SIMULADO
+    await check_and_raise_simulated_error(db, request, "/Contacts")
     
     try:
         body = await request.json()
@@ -319,6 +363,8 @@ async def create_deal(request: Request, db: Session = Depends(get_db)):
     Formato de respuesta igual al Zoho real
     """
     start_time = time.time()
+        # VERIFICAR ERROR SIMULADO
+    await check_and_raise_simulated_error(db, request, "/Deals")
     
     try:
         body = await request.json()
@@ -399,6 +445,7 @@ async def update_deal(request: Request, db: Session = Depends(get_db)):
     Formato de respuesta igual al Zoho real
     """
     start_time = time.time()
+    await check_and_raise_simulated_error(db, request, "/Deals")
     
     try:
         body = await request.json()
@@ -487,6 +534,7 @@ async def update_deal_by_id(request: Request,deal_id: str, db: Session = Depends
     Formato de respuesta igual al Zoho real
     """
     start_time = time.time()
+    await check_and_raise_simulated_error(db, request, f"/Deals/{deal_id}")
     
     try:
         body = await request.json()
@@ -578,6 +626,7 @@ async def create_lead(request: Request, db: Session = Depends(get_db)):
     Formato de respuesta igual al Zoho real (basado en logs.txt)
     """
     start_time = time.time()
+    await check_and_raise_simulated_error(db, request, f"/Leads")
     try:
         body = await request.json()
         lead_data_list = body.get("data", [])
@@ -655,6 +704,7 @@ async def update_lead(request: Request, db: Session = Depends(get_db)):
     Formato de respuesta igual al Zoho real (similar a PUT /Deals)
     """
     start_time = time.time()
+    await check_and_raise_simulated_error(db, request, f"/Leads")
     try:
         body = await request.json()
         
@@ -728,6 +778,7 @@ async def search_deals(
     Ejemplo: /Deals/search?criteria=(EC_ID:equals:FL-TEST00000001)
     """
     start_time = time.time()
+    await check_and_raise_simulated_error(db, request, f"/Deals/search")
     try:
         # Parsear criterios de búsqueda
         search_filters = ZohoMockService.parse_search_criteria(criteria)
@@ -783,6 +834,7 @@ async def search_deals(
         return response_body
         
     except Exception as e:
+        print(traceback.format_exc())
         response_time_ms = int((time.time() - start_time) * 1000)
         error_response = {
             "code": "ERROR",
@@ -793,6 +845,196 @@ async def search_deals(
             db=db,
             request=request,
             endpoint="/Deals/search",
+            method="GET",
+            response_status=500,
+            response_body=error_response,
+            response_time_ms=response_time_ms,
+            success=False,
+            error_message=str(e)
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+
+# Agregar después de update_contact en app/routes/zoho.py
+
+@router.get("/Contacts/search")
+async def search_contacts(
+    request: Request,
+    db: Session = Depends(get_db),
+    criteria: Optional[str] = Query(None),
+    per_page: int = Query(200, ge=1, le=200),
+    page: int = Query(1, ge=1),
+    sort_by: str = Query("id", regex="^[a-zA-Z_]+$"),
+    sort_order: str = Query("desc", regex="^(asc|desc)$")
+):
+    """
+    Busca contactos en Zoho CRM usando criterios
+    Formato de respuesta igual al Zoho real
+    Ejemplos:
+    - /Contacts/search?criteria=(Email:equals:correo@ejemplo.com)
+    - /Contacts/search?criteria=(Phone:equals:52007922)
+    - /Contacts/search?criteria=((Email:equals:correo@ejemplo.com)or(Phone:equals:52007922))
+    """
+    start_time = time.time()
+    await check_and_raise_simulated_error(db, request, f"/Deals/search")
+    try:
+        # Parsear criterios de búsqueda
+        search_filters = ZohoMockService.parse_search_criteria(criteria)
+        
+        # Ejecutar búsqueda
+        contacts, total_count = ZohoMockService.search_contacts(
+            db, search_filters, page, per_page, sort_by, sort_order
+        )
+        
+        if not contacts or len(contacts) == 0:
+            response_time_ms = int((time.time() - start_time) * 1000)
+            await log_api_call(
+                db=db,
+                request=request,
+                endpoint="/Contacts/search",
+                method="GET",
+                response_status=204,
+                response_body={},
+                response_time_ms=response_time_ms,
+                success=True
+            )
+            return Response(status_code=204)
+        
+        # Construir respuesta EXACTAMENTE como Zoho real
+        response_body = {
+            "data": [
+                ZohoMockService.build_zoho_contact_response(contact)
+                for contact in contacts
+            ],
+            "info": {
+                "per_page": per_page,
+                "count": len(contacts),
+                "page": page,
+                "sort_by": sort_by,
+                "sort_order": sort_order,
+                "more_records": (page * per_page) < total_count
+            }
+        }
+        
+        response_time_ms = int((time.time() - start_time) * 1000)
+        await log_api_call(
+            db=db,
+            request=request,
+            endpoint="/Contacts/search",
+            method="GET",
+            response_status=200,
+            response_body=response_body,
+            response_time_ms=response_time_ms,
+            zoho_contact_id=contacts[0].zoho_id if contacts else None
+        )
+        return response_body
+        
+    except Exception as e:
+        response_time_ms = int((time.time() - start_time) * 1000)
+        error_response = {
+            "code": "ERROR",
+            "status": "error",
+            "message": str(e)
+        }
+        await log_api_call(
+            db=db,
+            request=request,
+            endpoint="/Contacts/search",
+            method="GET",
+            response_status=500,
+            response_body=error_response,
+            response_time_ms=response_time_ms,
+            success=False,
+            error_message=str(e)
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/Contacts/{contact_id}")
+async def get_contact(
+    request: Request,
+    contact_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Obtiene un contacto por su Zoho ID
+    Formato de respuesta igual al Zoho real
+    """
+    start_time = time.time()
+    await check_and_raise_simulated_error(db, request, f"/Contacts/{contact_id}")
+    try:
+        contact = db.query(ZohoContact).filter(ZohoContact.zoho_id == contact_id).first()
+        
+        if not contact:
+            # Verificar si el ID tiene formato válido (15 dígitos después de CRM)
+            if not re.match(r'^\d{15,18}$', contact_id):
+                response_body = {
+                    "code": "INVALID_URL_PATTERN",
+                    "details": {},
+                    "message": "Please check if the URL trying to access is a correct one",
+                    "status": "error"
+                }
+                response_time_ms = int((time.time() - start_time) * 1000)
+                await log_api_call(
+                    db=db,
+                    request=request,
+                    endpoint=f"/Contacts/{contact_id}",
+                    method="GET",
+                    response_status=404,
+                    response_body=response_body,
+                    response_time_ms=response_time_ms,
+                    success=False,
+                    error_message="Invalid URL pattern"
+                )
+                raise HTTPException(status_code=404, detail=response_body)
+            
+            # ID válido pero no encontrado
+            response_time_ms = int((time.time() - start_time) * 1000)
+            await log_api_call(
+                db=db,
+                request=request,
+                endpoint=f"/Contacts/{contact_id}",
+                method="GET",
+                response_status=204,
+                response_body={},
+                response_time_ms=response_time_ms,
+                success=True
+            )
+            return Response(status_code=204)
+        
+        # Construir respuesta EXACTAMENTE como Zoho real
+        response_body = {
+            "data": [
+                ZohoMockService.build_zoho_contact_response(contact)
+            ]
+        }
+        
+        response_time_ms = int((time.time() - start_time) * 1000)
+        await log_api_call(
+            db=db,
+            request=request,
+            endpoint=f"/Contacts/{contact_id}",
+            method="GET",
+            response_status=200,
+            response_body=response_body,
+            response_time_ms=response_time_ms,
+            zoho_contact_id=contact.zoho_id
+        )
+        return response_body
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        response_time_ms = int((time.time() - start_time) * 1000)
+        error_response = {
+            "code": "ERROR",
+            "status": "error",
+            "message": str(e)
+        }
+        await log_api_call(
+            db=db,
+            request=request,
+            endpoint=f"/Contacts/{contact_id}",
             method="GET",
             response_status=500,
             response_body=error_response,

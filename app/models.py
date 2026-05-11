@@ -5,21 +5,50 @@ from app.database import Base
 
 class ZohoContact(Base):
     __tablename__ = "zoho_contacts"
-    
     id = Column(Integer, primary_key=True, autoincrement=True)
     zoho_id = Column(String(50), unique=True, nullable=False, index=True)
+    account_name_id = Column(String(50))
+    owner_id = Column(String(50))
+    
+    # Campos básicos
     email = Column(String(255), index=True)
     first_name = Column(String(100))
     last_name = Column(String(100))
-    phone = Column(String(50))
+    full_name = Column(String(200))
+    phone = Column(String(50), index=True)
+    mobile = Column(String(50))
+    
+    # Ubicación
     country = Column(String(100))
     state = Column(String(100))
     city = Column(String(100))
+    municipality = Column(String(100))
     address = Column(Text)
     postal_code = Column(String(20))
-    account_name_id = Column(String(50))
-    owner_id = Column(String(50))
+    
+    # Campos adicionales del mapeo
+    birth_date = Column(String(20))
+    accept_policy = Column(Boolean, default=False)
+    accept_newsletter = Column(Boolean, default=False)
+    customer_contacted = Column(String(100))
+    store = Column(String(100))
+    
+    # Relaciones Zoho
+    account_zoho_id = Column(String(50))
+    owner_zoho_id = Column(String(50))
+    
+    # Campos adicionales de tus logs
     commercial_origin = Column(String(100))
+    document_id = Column(String(50))
+    document_type = Column(String(100))
+    office_assigned = Column(String(100))
+    community_manager = Column(String(100))
+    acquisition_source = Column(String(100))
+    contact_status = Column(String(100))
+    
+    # Datos completos en JSON para flexibilidad
+    contact_data = Column(JSON)
+    
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -184,3 +213,19 @@ class ZohoLead(Base):
     
     def __repr__(self):
         return f"<ZohoLead(zoho_id={self.zoho_id}, email={self.email})>"
+    
+
+class ErrorSimulation(Base):
+    __tablename__ = "error_simulations"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    error_type = Column(String(50), nullable=False)  # ConnectTimeout, SSLError, Timeout, ConnectionError
+    is_active = Column(Boolean, default=False)
+    consecutive_errors = Column(Integer, default=1)  # Cuántas veces consecutivas debe fallar
+    current_error_count = Column(Integer, default=0)  # Contador actual de errores
+    endpoint_filter = Column(String(500), nullable=True)  # Filtrar por endpoint específico (opcional)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f"<ErrorSimulation(type={self.error_type}, active={self.is_active})>"
