@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 from app.routes import zoho, admin
 from app.config import BASE_DIR
-
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 # # Crear tablas
 Base.metadata.create_all(bind=engine)
 
@@ -12,6 +13,7 @@ app = FastAPI(
     description="Mock de la API de Zoho CRM con persistencia SQLite y logging completo",
     version="1.0.0"
 )
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 # CORS
 app.add_middleware(

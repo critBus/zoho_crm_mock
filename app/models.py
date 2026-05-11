@@ -213,3 +213,19 @@ class ZohoLead(Base):
     
     def __repr__(self):
         return f"<ZohoLead(zoho_id={self.zoho_id}, email={self.email})>"
+    
+
+class ErrorSimulation(Base):
+    __tablename__ = "error_simulations"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    error_type = Column(String(50), nullable=False)  # ConnectTimeout, SSLError, Timeout, ConnectionError
+    is_active = Column(Boolean, default=False)
+    consecutive_errors = Column(Integer, default=1)  # Cuántas veces consecutivas debe fallar
+    current_error_count = Column(Integer, default=0)  # Contador actual de errores
+    endpoint_filter = Column(String(500), nullable=True)  # Filtrar por endpoint específico (opcional)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def __repr__(self):
+        return f"<ErrorSimulation(type={self.error_type}, active={self.is_active})>"

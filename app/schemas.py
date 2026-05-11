@@ -103,3 +103,29 @@ class LeadSchema(BaseModel):
     
     class Config:
         from_attributes = True
+
+
+# Agregar al final de app/schemas.py
+
+class ErrorSimulationSchema(BaseModel):
+    id: int
+    error_type: str
+    is_active: bool
+    consecutive_errors: int
+    current_error_count: int
+    endpoint_filter: Optional[str] = None
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class ErrorSimulationInput(BaseModel):
+    error_type: str
+    is_active: bool = True
+    consecutive_errors: int = 1
+    endpoint_filter: Optional[str] = None
+
+class ErrorSimulationResponse(BaseModel):
+    success: bool
+    message: str
+    simulation: Optional[ErrorSimulationSchema] = None

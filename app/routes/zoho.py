@@ -12,6 +12,8 @@ from app.config import ZOHO_MOCK_CONFIG
 from app.models import ZohoLead
 from app.services.zoho_mock import ZohoMockService
 import traceback
+from app.services.error_simulation import ErrorSimulationService
+from requests.exceptions import ConnectTimeout, SSLError, Timeout, ConnectionError
 
 router = APIRouter()
 
@@ -84,11 +86,48 @@ async def log_api_call(
     
     return request_id
 
+async def check_and_raise_simulated_error(
+    db: Session,
+    request: Request,
+    endpoint: str
+):
+    """Verifica si debe levantar un error simulado"""
+    simulation = ErrorSimulationService.get_active_simulation(db, endpoint)
+    
+    if simulation and ErrorSimulationService.should_raise_error(simulation):
+        # Incrementar contador
+        ErrorSimulationService.increment_error_count(db, simulation)
+        
+        # Extraer URL de la petición
+        url = str(request.url)
+        
+        # Loguear el error simulado
+        start_time = time.time()
+        response_time_ms = int((time.time() - start_time) * 1000)
+        
+        await log_api_call(
+            db=db,
+            request=request,
+            endpoint=endpoint,
+            method=request.method,
+            response_status=500,
+            response_body={"error": f"Simulated {simulation.error_type}"},
+            response_time_ms=response_time_ms,
+            success=False,
+            error_message=f"Simulated {simulation.error_type} (count: {simulation.current_error_count}/{simulation.consecutive_errors})"
+        )
+        
+        # Levantar el error simulado
+        ErrorSimulationService.raise_simulated_error(simulation.error_type, url)
+    
+    return simulation
 
 @router.post("/token")
 async def login(request: Request, db: Session = Depends(get_db)):
     """Simula login de Zoho para obtener access token"""
     start_time = time.time()
+        # VERIFICAR ERROR SIMULADO
+    await check_and_raise_simulated_error(db, request, "/token")
     
     try:
         token = ZohoMockService.get_or_create_token(db)
@@ -136,6 +175,8 @@ async def create_contact(request: Request, db: Session = Depends(get_db)):
     Formato de respuesta igual al Zoho real
     """
     start_time = time.time()
+        # VERIFICAR ERROR SIMULADO
+    await check_and_raise_simulated_error(db, request, "/Contacts")
     
     try:
         body = await request.json()
@@ -208,6 +249,8 @@ async def update_contact(request: Request, db: Session = Depends(get_db)):
     Formato de respuesta igual al Zoho real
     """
     start_time = time.time()
+        # VERIFICAR ERROR SIMULADO
+    await check_and_raise_simulated_error(db, request, "/Contacts")
     
     try:
         body = await request.json()
@@ -320,6 +363,8 @@ async def create_deal(request: Request, db: Session = Depends(get_db)):
     Formato de respuesta igual al Zoho real
     """
     start_time = time.time()
+        # VERIFICAR ERROR SIMULADO
+    await check_and_raise_simulated_error(db, request, "/Deals")
     
     try:
         body = await request.json()
@@ -400,6 +445,7 @@ async def update_deal(request: Request, db: Session = Depends(get_db)):
     Formato de respuesta igual al Zoho real
     """
     start_time = time.time()
+    await check_and_raise_simulated_error(db, request, "/Deals")
     
     try:
         body = await request.json()
@@ -488,6 +534,7 @@ async def update_deal_by_id(request: Request,deal_id: str, db: Session = Depends
     Formato de respuesta igual al Zoho real
     """
     start_time = time.time()
+    await check_and_raise_simulated_error(db, request, f"/Deals/{deal_id}")
     
     try:
         body = await request.json()
@@ -579,6 +626,7 @@ async def create_lead(request: Request, db: Session = Depends(get_db)):
     Formato de respuesta igual al Zoho real (basado en logs.txt)
     """
     start_time = time.time()
+    await check_and_raise_simulated_error(db, request, f"/Leads")
     try:
         body = await request.json()
         lead_data_list = body.get("data", [])
@@ -656,6 +704,7 @@ async def update_lead(request: Request, db: Session = Depends(get_db)):
     Formato de respuesta igual al Zoho real (similar a PUT /Deals)
     """
     start_time = time.time()
+    await check_and_raise_simulated_error(db, request, f"/Leads")
     try:
         body = await request.json()
         
@@ -729,6 +778,7 @@ async def search_deals(
     Ejemplo: /Deals/search?criteria=(EC_ID:equals:FL-TEST00000001)
     """
     start_time = time.time()
+    await check_and_raise_simulated_error(db, request, f"/Deals/search")
     try:
         # Parsear criterios de búsqueda
         search_filters = ZohoMockService.parse_search_criteria(criteria)
@@ -827,6 +877,7 @@ async def search_contacts(
     - /Contacts/search?criteria=((Email:equals:correo@ejemplo.com)or(Phone:equals:52007922))
     """
     start_time = time.time()
+    await check_and_raise_simulated_error(db, request, f"/Deals/search")
     try:
         # Parsear criterios de búsqueda
         search_filters = ZohoMockService.parse_search_criteria(criteria)
@@ -910,6 +961,7 @@ async def get_contact(
     Formato de respuesta igual al Zoho real
     """
     start_time = time.time()
+    await check_and_raise_simulated_error(db, request, f"/Contacts/{contact_id}")
     try:
         contact = db.query(ZohoContact).filter(ZohoContact.zoho_id == contact_id).first()
         

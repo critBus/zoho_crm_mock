@@ -11,6 +11,9 @@ from app.config import ADMIN_USERNAME, ADMIN_PASSWORD
 from pathlib import Path
 from app.models import ZohoLead
 
+from app.services.error_simulation import ErrorSimulationService
+from app.schemas import ErrorSimulationSchema, ErrorSimulationInput, ErrorSimulationResponse
+
 router = APIRouter()
 
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
@@ -411,3 +414,128 @@ async def admin_lead_detail(
         "lead": lead,
         "related_logs": related_logs,
     })
+
+
+
+
+
+@router.get("/admin/error-simulations", response_class=HTMLResponse)
+async def admin_error_simulations(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Vista de configuración de simulación de errores"""
+    if not check_admin_auth(request):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/admin/login", status_code=303)
+    
+    simulations = ErrorSimulationService.get_all_simulations(db)
+    
+    return templates.TemplateResponse("admin/error_simulations.html", {
+        "request": request,
+        "simulations": simulations,
+        "error_types": ErrorSimulationService.VALID_ERROR_TYPES
+    })
+
+@router.post("/admin/error-simulations")
+async def create_error_simulation(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Crea o actualiza una simulación de error"""
+    if not check_admin_auth(request):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/admin/login", status_code=303)
+    
+    # Leer formulario explícitamente
+    form = await request.form()
+    error_type = form.get("error_type")
+    consecutive_errors = int(form.get("consecutive_errors", 1))
+    endpoint_filter = form.get("endpoint_filter") if form.get("endpoint_filter") else None
+    
+    
+    try:
+        print(f"error_type {error_type}")
+        simulation = ErrorSimulationService.create_or_update_simulation(
+            db=db,
+            error_type=error_type,
+            is_active=True,
+            consecutive_errors=consecutive_errors,
+            endpoint_filter=endpoint_filter if endpoint_filter else None
+        )
+        
+        from fastapi.responses import RedirectResponse
+        response = RedirectResponse(url="/admin/error-simulations", status_code=303)
+        return response
+    except ValueError as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/admin/error-simulations/{simulation_id}/toggle")
+async def toggle_error_simulation(
+    request: Request,
+    simulation_id: int,
+    db: Session = Depends(get_db),
+):
+    """Activa/desactiva una simulación"""
+    if not check_admin_auth(request):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/admin/login", status_code=303)
+    
+    simulation = db.query(ErrorSimulation).filter(ErrorSimulation.id == simulation_id).first()
+    if simulation:
+        simulation.is_active = not simulation.is_active
+        simulation.updated_at = datetime.utcnow()
+        db.commit()
+    
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/admin/error-simulations", status_code=303)
+
+@router.post("/admin/error-simulations/{simulation_id}/reset")
+async def reset_error_simulation(
+    request: Request,
+    simulation_id: int,
+    db: Session = Depends(get_db),
+):
+    """Resetea el contador de errores de una simulación"""
+    if not check_admin_auth(request):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/admin/login", status_code=303)
+    
+    simulation = db.query(ErrorSimulation).filter(ErrorSimulation.id == simulation_id).first()
+    if simulation:
+        ErrorSimulationService.reset_error_count(db, simulation)
+    
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/admin/error-simulations", status_code=303)
+
+@router.post("/admin/error-simulations/{simulation_id}/delete")
+async def delete_error_simulation(
+    request: Request,
+    simulation_id: int,
+    db: Session = Depends(get_db),
+):
+    """Elimina una simulación"""
+    if not check_admin_auth(request):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/admin/login", status_code=303)
+    
+    ErrorSimulationService.delete_simulation(db, simulation_id)
+    
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/admin/error-simulations", status_code=303)
+
+@router.post("/admin/error-simulations/reset-all")
+async def reset_all_simulations(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Resetea todas las simulaciones"""
+    if not check_admin_auth(request):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/admin/login", status_code=303)
+    
+    ErrorSimulationService.reset_all_simulations(db)
+    
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/admin/error-simulations", status_code=303)
