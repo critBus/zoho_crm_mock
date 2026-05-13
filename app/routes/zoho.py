@@ -122,7 +122,7 @@ async def check_and_raise_simulated_error(
     
     return simulation
 
-@router.post("/token")
+@router.post("/oauth/v2/token")
 async def login(request: Request, db: Session = Depends(get_db)):
     """Simula login de Zoho para obtener access token"""
     start_time = time.time()
@@ -168,7 +168,7 @@ async def login(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/Contacts")
+@router.post("/crm/v2/Contacts")
 async def create_contact(request: Request, db: Session = Depends(get_db)):
     """
     Crea un contacto en Zoho CRM
@@ -242,7 +242,7 @@ async def create_contact(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/Contacts")
+@router.put("/crm/v2/Contacts")
 async def update_contact(request: Request, db: Session = Depends(get_db)):
     """
     Actualiza un contacto en Zoho CRM
@@ -356,7 +356,7 @@ async def update_contact(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/Deals")
+@router.post("/crm/v2/Deals")
 async def create_deal(request: Request, db: Session = Depends(get_db)):
     """
     Crea un deal en Zoho CRM
@@ -438,7 +438,7 @@ async def create_deal(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/Deals")
+@router.put("/crm/v2/Deals")
 async def update_deal(request: Request, db: Session = Depends(get_db)):
     """
     Actualiza un deal en Zoho CRM
@@ -527,7 +527,7 @@ async def update_deal(request: Request, db: Session = Depends(get_db)):
         )
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.put("/Deals/{deal_id}")
+@router.put("/crm/v2/Deals/{deal_id}")
 async def update_deal_by_id(request: Request,deal_id: str, db: Session = Depends(get_db)):
     """
     Actualiza un deal en Zoho CRM
@@ -619,7 +619,7 @@ async def update_deal_by_id(request: Request,deal_id: str, db: Session = Depends
 
 # Agregar después de update_deal
 
-@router.post("/Leads")
+@router.post("/crm/v2/Leads")
 async def create_lead(request: Request, db: Session = Depends(get_db)):
     """
     Crea un lead en Zoho CRM y automáticamente un Deal relacionado
@@ -697,7 +697,7 @@ async def create_lead(request: Request, db: Session = Depends(get_db)):
         )
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.put("/Leads")
+@router.put("/crm/v2/Leads")
 async def update_lead(request: Request, db: Session = Depends(get_db)):
     """
     Actualiza un lead en Zoho CRM
@@ -762,7 +762,7 @@ async def update_lead(request: Request, db: Session = Depends(get_db)):
 
 # Agregar después de update_deal en app/routes/zoho.py
 
-@router.get("/Deals/search")
+@router.get("/crm/v2/Deals/search")
 async def search_deals(
     request: Request,
     db: Session = Depends(get_db),
@@ -858,7 +858,7 @@ async def search_deals(
 
 # Agregar después de update_contact en app/routes/zoho.py
 
-@router.get("/Contacts/search")
+@router.get("/crm/v2/Contacts/search")
 async def search_contacts(
     request: Request,
     db: Session = Depends(get_db),
@@ -950,7 +950,7 @@ async def search_contacts(
         )
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/Contacts/{contact_id}")
+@router.get("/crm/v2/Contacts/{contact_id}")
 async def get_contact(
     request: Request,
     contact_id: str,
@@ -1036,6 +1036,109 @@ async def get_contact(
             request=request,
             endpoint=f"/Contacts/{contact_id}",
             method="GET",
+            response_status=500,
+            response_body=error_response,
+            response_time_ms=response_time_ms,
+            success=False,
+            error_message=str(e)
+        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/crm/v8/Deals/{deal_id}/actions/add_tags")
+async def add_deal_tags(request: Request, deal_id: str, db: Session = Depends(get_db)):
+    """
+    Añade tags a un deal en Zoho CRM (Soporta ruta v8 explícita).
+    Formato de respuesta igual al Zoho real.
+    """
+    start_time = time.time()
+    endpoint_name = f"/Deals/{deal_id}/actions/add_tags"
+    
+    # VERIFICAR ERROR SIMULADO
+    await check_and_raise_simulated_error(db, request, endpoint_name)
+    
+    try:
+        body = await request.json()
+        tags_input = body.get("tags", [])
+        
+        # Extraer solo los nombres de los tags enviados en el body
+        tag_names = [tag.get("name") for tag in tags_input if isinstance(tag, dict) and tag.get("name")]
+        
+        deal, code, message = ZohoMockService.add_tags_to_deal(db, deal_id, tag_names)
+        
+        if not deal:
+            error_response = {
+                "data": [
+                    {
+                        "code": code,
+                        "details": {},
+                        "message": message,
+                        "status": "error"
+                    }
+                ]
+            }
+            response_time_ms = int((time.time() - start_time) * 1000)
+            await log_api_call(
+                db=db,
+                request=request,
+                endpoint=endpoint_name,
+                method="POST",
+                body=body,
+                response_status=404,
+                response_body=error_response,
+                response_time_ms=response_time_ms,
+                success=False,
+                error_message=message
+            )
+            return error_response
+            
+        # Construir respuesta EXACTAMENTE como Zoho real
+        response_body = {
+            "data": [
+                {
+                    "code": code,
+                    "details": {
+                        "id": deal.zoho_id,
+                        "tags": deal.deal_data.get("tags", [])
+                    },
+                    "message": message,
+                    "status": "success"
+                }
+            ]
+        }
+        
+        response_time_ms = int((time.time() - start_time) * 1000)
+        
+        await log_api_call(
+            db=db,
+            request=request,
+            endpoint=endpoint_name,
+            method="POST",
+            body=body,
+            response_status=200,
+            response_body=response_body,
+            response_time_ms=response_time_ms,
+            zoho_deal_id=deal.zoho_id
+        )
+        
+        return response_body
+        
+    except Exception as e:
+        response_time_ms = int((time.time() - start_time) * 1000)
+        error_response = {
+            "data": [
+                {
+                    "code": "ERROR",
+                    "status": "error",
+                    "message": str(e)
+                }
+            ]
+        }
+        await log_api_call(
+            db=db,
+            request=request,
+            endpoint=endpoint_name,
+            method="POST",
             response_status=500,
             response_body=error_response,
             response_time_ms=response_time_ms,

@@ -840,3 +840,48 @@ class ZohoMockService:
         deals = filtered_deals[offset:offset + per_page]
         
         return deals, total_count
+    
+    @staticmethod
+    def add_tags_to_deal(db: Session, zoho_id: str, tag_names: List[str]) -> Tuple[Optional[ZohoDeal], str, str]:
+        """
+        Añade tags a un deal existente.
+        Returns: (deal, response_code, message)
+        """
+        deal = db.query(ZohoDeal).filter(ZohoDeal.zoho_id == zoho_id).first()
+        
+        if not deal:
+            return None, "INVALID_DATA", "the id given seems to be invalid"
+        
+        # Inicializar tags en el JSON si no existen
+        if not deal.deal_data:
+            deal.deal_data = {}
+            
+        if "tags" not in deal.deal_data:
+            deal.deal_data["tags"] = []
+            
+        existing_tags = deal.deal_data["tags"]
+        existing_names = [t["name"] for t in existing_tags]
+        
+        # Agregar los nuevos tags que no estén duplicados
+        for name in tag_names:
+            if name not in existing_names:
+                # Zoho usa IDs de 18 dígitos para los tags
+                mock_tag_id = "769" + ''.join(random.choices(string.digits, k=15))
+                existing_tags.append({
+                    "name": name,
+                    "id": mock_tag_id,
+                    "color_code": None
+                })
+        
+        # Actualizar el JSON y forzar el guardado en SQLAlchemy
+        # Es importante reasignar el diccionario para que SQLAlchemy detecte el cambio en el JSON
+        deal.deal_data = {**deal.deal_data, "tags": existing_tags}
+        deal.updated_at = datetime.utcnow()
+        
+        db.commit()
+        db.refresh(deal)
+        
+        return deal, "SUCCESS", "tags updated successfully"
+    
+
+
