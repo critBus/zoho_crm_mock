@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, Request, HTTPException, Query, Response
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import ApiLog
@@ -369,6 +370,7 @@ async def create_deal(request: Request, db: Session = Depends(get_db)):
     try:
         body = await request.json()
         deal_data = body.get("data", [{}])[0]
+
         triggers = body.get("trigger", [])
         
         # Obtener contacto relacionado si existe
@@ -378,6 +380,34 @@ async def create_deal(request: Request, db: Session = Depends(get_db)):
             contact = ZohoMockService.get_contact_by_id(db, contact_id)
         
         deal = ZohoMockService.create_deal(db, deal_data, contact)
+
+        if isinstance(deal,tuple) and deal[1] == "INVALID_DATA":
+            results={
+                "data": [
+                    {
+                        "code": "INVALID_DATA",
+                        "details": {
+                            "api_name": "Contact_Name"
+                        },
+                        "message": "invalid data",
+                        "status": "error"
+                    }
+                ]
+            }
+            status_code = 202
+            response_time_ms = int((time.time() - start_time) * 1000)
+            await log_api_call(
+                db=db,
+                request=request,
+                endpoint="/crm/v2/Deals",
+                method="POST",
+                response_status=status_code,
+                response_body=results,
+                response_time_ms=response_time_ms,
+                success=False,
+                error_message="Contact_Name invalid data"
+            )
+            return JSONResponse(content=results, status_code=status_code)
         
         # Construir respuesta EXACTAMENTE como Zoho real
         response_body = {

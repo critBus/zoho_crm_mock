@@ -170,6 +170,13 @@ class ZohoMockService:
     @staticmethod
     def create_deal(db: Session, deal_data: Dict[str, Any], contact: Optional[ZohoContact] = None) -> ZohoDeal:
         """Crea un deal en Zoho"""
+        contact_info = deal_data.get("Contact_Name")
+    
+        if contact_info and isinstance(contact_info, dict):
+            contact_id = contact_info.get("id")
+            if contact_id and not ZohoMockService.check_contact_exists(db, contact_id):
+                return None, "INVALID_DATA", "Contact_Name" # Retornamos el api_name para el error
+
         zoho_id = ZohoMockService.generate_zoho_id("DEAL")
         
         deal = ZohoDeal(
@@ -883,5 +890,10 @@ class ZohoMockService:
         
         return deal, "SUCCESS", "tags updated successfully"
     
-
+    @staticmethod
+    def check_contact_exists(db: Session, contact_id: str) -> bool:
+        """Verifica si un contacto existe por su Zoho ID """
+        if not contact_id:
+            return False
+        return db.query(ZohoContact).filter(ZohoContact.zoho_id == contact_id).first() is not None
 
