@@ -87,6 +87,19 @@
             <p class="font-mono text-sm">{{ contact.updated_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
         </div>
     </div>
+
+    <div class="grid grid-cols-2 gap-4 mb-6">
+        <form
+            method="post"
+            action="/admin/contacts/{{ contact.id }}/delete"
+            onsubmit="return confirm('¿Seguro que quieres borrar este contacto?');"
+            >
+            <button type="submit" class="btn btn-danger">
+                Borrar contacto
+            </button>
+        </form>
+    </div>
+    
     
     <!-- Logs Relacionados -->
     {% if related_logs %}

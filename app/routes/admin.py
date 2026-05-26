@@ -13,6 +13,8 @@ from app.models import ZohoLead
 
 from app.services.error_simulation import ErrorSimulationService
 from app.schemas import ErrorSimulationSchema, ErrorSimulationInput, ErrorSimulationResponse
+from datetime import datetime
+from app.models import ApiLog, ZohoContact, ZohoDeal, ApiToken, ZohoLead, ErrorSimulation
 
 router = APIRouter()
 
@@ -539,3 +541,37 @@ async def reset_all_simulations(
     
     from fastapi.responses import RedirectResponse
     return RedirectResponse(url="/admin/error-simulations", status_code=303)
+
+@router.post("/admin/contacts/{contact_id}/delete")
+async def delete_admin_contact(
+    request: Request,
+    contact_id: int,
+    db: Session = Depends(get_db),
+):
+    """Elimina un contacto desde administración para simular datos inexistentes o erróneos."""
+    if not check_admin_auth(request):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/admin/login", status_code=303)
+
+    contact = db.query(ZohoContact).filter(ZohoContact.id == contact_id).first()
+
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+
+    # Guardamos el zoho_id antes de borrar para limpiar referencias en logs.
+    deleted_zoho_id = contact.zoho_id
+
+    # Evita problemas con relaciones hacia ApiLog.
+    # Los logs se conservan, pero ya no quedan atados a un contacto inexistente.
+    db.query(ApiLog).filter(
+        ApiLog.zoho_contact_id == deleted_zoho_id
+    ).update(
+        {ApiLog.zoho_contact_id: None},
+        synchronize_session=False
+    )
+
+    db.delete(contact)
+    db.commit()
+
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/admin/contacts", status_code=303)

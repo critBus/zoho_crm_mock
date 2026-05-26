@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Request, HTTPException, Query, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import ApiLog
+from app.models import ApiLog, ZohoContact
 from app.services.zoho_mock import ZohoMockService
 from app.services.logger import ApiLogger
 from app.config import ZOHO_MOCK_CONFIG
@@ -15,7 +15,7 @@ from app.services.zoho_mock import ZohoMockService
 import traceback
 from app.services.error_simulation import ErrorSimulationService
 from requests.exceptions import ConnectTimeout, SSLError, Timeout, ConnectionError
-
+import re
 router = APIRouter()
 
 async def log_api_call(
