@@ -701,7 +701,8 @@ async def create_lead(request: Request, db: Session = Depends(get_db)):
             response_time_ms=response_time_ms,
             zoho_lead_id=results[0]["details"]["id"] if results else None
         )
-        return response_body
+        return JSONResponse(content=response_body, status_code=202 if code == "DUPLICATE_DATA" else 200)
+        
         
     except Exception as e:
         response_time_ms = int((time.time() - start_time) * 1000)
@@ -837,6 +838,7 @@ async def search_deals(
             "data": [
                 {
                     **deal.deal_data,  # Todos los campos del deal
+                    "id":deal.zoho_id,
                 }
                 for deal in deals
             ],
@@ -849,6 +851,7 @@ async def search_deals(
                 "more_records": (page * per_page) < total_count
             }
         }
+        print(json.dumps(response_body, indent=2))
         
         response_time_ms = int((time.time() - start_time) * 1000)
         await log_api_call(

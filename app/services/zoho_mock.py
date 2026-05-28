@@ -86,8 +86,8 @@ class ZohoMockService:
         existing_contact = None
         if email:
             existing_contact = db.query(ZohoContact).filter(ZohoContact.email == email).first()
-        if not existing_contact and phone:
-            existing_contact = db.query(ZohoContact).filter(ZohoContact.phone == phone).first()
+        # if not existing_contact and phone:
+        #     existing_contact = db.query(ZohoContact).filter(ZohoContact.phone == phone).first()
         
         is_new = existing_contact is None
         
