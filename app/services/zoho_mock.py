@@ -896,4 +896,21 @@ class ZohoMockService:
         if not contact_id:
             return False
         return db.query(ZohoContact).filter(ZohoContact.zoho_id == contact_id).first() is not None
+    
+    @staticmethod
+    def check_ec_id_exists(db: Session, ec_id: str) -> bool:
+        """Verifica si un ZohoDeal existe por su ec_id """
+        if not ec_id:
+            return False
+        return db.query(ZohoDeal).filter(ZohoDeal.ec_id == ec_id).first() is not None
+    
+    @staticmethod
+    def get_zoho_id_from_ec_id(db: Session, ec_id: str) -> str:
+        """Busca el zoho_id del deal que tenga el ec_id """
+        if not ec_id:
+            return ""
+        zoho_deal=db.query(ZohoDeal).filter(ZohoDeal.ec_id == ec_id).first()
+        if zoho_deal:
+            return zoho_deal.zoho_id
+        return  ""
 

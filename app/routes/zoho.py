@@ -379,6 +379,43 @@ async def create_deal(request: Request, db: Session = Depends(get_db)):
         if contact_id:
             contact = ZohoMockService.get_contact_by_id(db, contact_id)
         
+        exists_ec_id=False
+        ec_id = deal_data.get("EC_ID","")
+        print(f"ec_id {ec_id} !!!!!!!!!!!!!!!!")
+        if ec_id:
+            exists_ec_id = ZohoMockService.check_ec_id_exists(db, ec_id)
+            print(f"exists_ec_id {exists_ec_id} !!!!!!!!!!!!!!!!!!!!!")
+
+        if exists_ec_id:
+            print("entro en la seccion donde existe el exists_ec_id !!!!!!!!!!!!!!!")
+            results={
+                "data": [
+                    {
+                        "code": "DUPLICATE_DATA",
+                        "details": {
+                            "api_name": "EC_ID",
+                            "id": ZohoMockService.get_zoho_id_from_ec_id(db,ec_id),
+                        },
+                        "message": "duplicate data",
+                        "status": "error"
+                    }
+                ]
+            }
+            status_code = 202
+            response_time_ms = int((time.time() - start_time) * 1000)
+            await log_api_call(
+                db=db,
+                request=request,
+                endpoint="/crm/v2/Deals",
+                method="POST",
+                response_status=status_code,
+                response_body=results,
+                response_time_ms=response_time_ms,
+                success=False,
+                error_message="EC_ID duplicate data"
+            )
+            return JSONResponse(content=results, status_code=status_code)
+        
         deal = ZohoMockService.create_deal(db, deal_data, contact)
 
         if isinstance(deal,tuple) and deal[1] == "INVALID_DATA":
@@ -409,6 +446,8 @@ async def create_deal(request: Request, db: Session = Depends(get_db)):
             )
             return JSONResponse(content=results, status_code=status_code)
         
+        
+
         # Construir respuesta EXACTAMENTE como Zoho real
         response_body = {
             "data": [
