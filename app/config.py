@@ -1,3 +1,5 @@
+import os
+
 from pathlib import Path
 from datetime import timedelta
 
@@ -27,3 +29,12 @@ ZOHO_MOCK_CONFIG = {
 # Admin Configuration
 ADMIN_USERNAME = "admin"
 ADMIN_PASSWORD = "admin123"  # Cambiar en producción
+
+# Local OAuth client used by Holbran's test integration.
+
+OAUTH_CLIENT_ID = os.getenv("ZOHO_MOCK_CLIENT_ID", "secret")
+OAUTH_CLIENT_SECRET = os.getenv("ZOHO_MOCK_CLIENT_SECRET", "secret")
+OAUTH_REDIRECT_URI = os.getenv(
+    "ZOHO_MOCK_REDIRECT_URI", "http://localhost:8000/integrations/oauth/callback/"
+)
+OAUTH_API_DOMAIN = os.getenv("ZOHO_MOCK_API_DOMAIN", "http://localhost:7002").rstrip("/")

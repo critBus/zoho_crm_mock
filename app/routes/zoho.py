@@ -123,52 +123,6 @@ async def check_and_raise_simulated_error(
     
     return simulation
 
-@router.post("/oauth/v2/token")
-async def login(request: Request, db: Session = Depends(get_db)):
-    """Simula login de Zoho para obtener access token"""
-    start_time = time.time()
-        # VERIFICAR ERROR SIMULADO
-    await check_and_raise_simulated_error(db, request, "/token")
-    
-    try:
-        token = ZohoMockService.get_or_create_token(db)
-        
-        response_body = {
-            "access_token": token.access_token,
-            "expires_in": token.expires_in,
-            "token_type": token.token_type
-        }
-        
-        response_time_ms = int((time.time() - start_time) * 1000)
-        
-        await log_api_call(
-            db=db,
-            request=request,
-            endpoint="/token",
-            method="POST",
-            response_status=200,
-            response_body=response_body,
-            response_time_ms=response_time_ms
-        )
-        
-        return response_body
-    
-    except Exception as e:
-        response_time_ms = int((time.time() - start_time) * 1000)
-        await log_api_call(
-            db=db,
-            request=request,
-            endpoint="/token",
-            method="POST",
-            response_status=500,
-            response_body={"error": str(e)},
-            response_time_ms=response_time_ms,
-            success=False,
-            error_message=str(e)
-        )
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.post("/crm/v2/Contacts")
 async def create_contact(request: Request, db: Session = Depends(get_db)):
     """

@@ -229,3 +229,14 @@ class ErrorSimulation(Base):
     
     def __repr__(self):
         return f"<ErrorSimulation(type={self.error_type}, active={self.is_active})>"
+
+class OAuthAuthorizationCode(Base):
+    """Short-lived, single-use grants for the local OAuth round trip."""
+
+    __tablename__ = "oauth_authorization_codes"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    code_hash = Column(String(64), unique=True, nullable=False)
+    client_id = Column(String(255), nullable=False)
+    redirect_uri = Column(String(500), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    consumed_at = Column(DateTime)

@@ -25,6 +25,9 @@ app.add_middleware(
 )
 
 # Rutas
+from app.routes import oauth
+
+app.include_router(oauth.router, prefix="", tags=["OAuth / Holbran"])
 app.include_router(zoho.router, prefix="", tags=["Zoho CRM"])
 app.include_router(admin.router, prefix="", tags=["Admin"])
 
@@ -35,7 +38,10 @@ async def root():
         "message": "Zoho CRM Mock API",
         "version": "1.0.0",
         "endpoints": {
-            "token": "POST /token",
+            "authorize": "GET /oauth/v2/auth",
+            "token": "POST /oauth/v2/token",
+            "organization": "GET /crm/v8/org",
+            "users": "GET /crm/v8/users?type=CurrentUser",
             "contacts": "POST /Contacts, PUT /Contacts, GET /Contacts/search, GET /Contacts/{id}",
             "deals": "POST /Deals, PUT /Deals, GET /Deals/search",
             "leads": "POST /Leads, PUT /Leads",
